@@ -1,6 +1,6 @@
 {
   "name": "nymia-ai-assistant",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "description": "Package for integrating an AI assistant chat into any web application easily and customizable.",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",

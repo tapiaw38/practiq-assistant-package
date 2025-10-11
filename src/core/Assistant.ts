@@ -194,9 +194,36 @@ export function createAssistant(options: AssistantOptions): Assistant {
     return processedContent;
   }
 
+  // Function to create conversation with title
+  async function createConversation(title: string): Promise<void> {
+    const response = await fetch(`${options.apiBaseUrl}/conversation/`, {
+      method: "POST",
+      mode: "cors",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${options.apiKey}`,
+      },
+      body: JSON.stringify({ title }),
+    });
+    if (!response.ok) {
+      throw new Error(`Error creating conversation: ${response.status}`);
+    }
+    const data = await response.json();
+    conversationId = data.data.id;
+    conversationClientId = data.data.client_id;
+    if (conversationClientId) {
+      localStorage.setItem("ai-client-id", conversationClientId);
+    }
+  }
+
   // Function to send FormData message (with audio)
   async function sendFormDataToApi(formData: FormData): Promise<string> {
-    if (!conversationId) return "No active conversation.";
+    // Create conversation if it doesn't exist yet
+    if (!conversationId) {
+      const content = (formData.get("content") as string) || "";
+      const title = content.substring(0, 20) || chatOptions.title || "Nueva conversación";
+      await createConversation(title);
+    }
 
     // Get context from FormData or generate it
     let context = (formData.get("context") as string) || "";
@@ -293,7 +320,11 @@ export function createAssistant(options: AssistantOptions): Assistant {
     message: string,
     context: string = ""
   ): Promise<string> {
-    if (!conversationId) return "No active conversation.";
+    // Create conversation if it doesn't exist yet
+    if (!conversationId) {
+      const title = message.substring(0, 20) || chatOptions.title || "Nueva conversación";
+      await createConversation(title);
+    }
 
     if (context === "") {
       const mainContent = document.querySelector(
@@ -382,7 +413,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
     }
   }
 
-  // Logic to create or load a conversation on startup
+  // Logic to load existing conversation on startup (don't create new one)
   async function initConversationAndMountChat() {
     try {
       // Get client_id from localStorage
@@ -390,57 +421,31 @@ export function createAssistant(options: AssistantOptions): Assistant {
       // Fetch all conversations
       const conversations = await fetchAllConversations();
       let useExisting = false;
-      if (conversations.length > 0) {
-        const firstConv = conversations[0];
-        conversationId = firstConv.id;
-        lastConversationClientId = firstConv.client_id;
-        // If the client_id matches, use this conversation
-        if (storedClientId && storedClientId === firstConv.client_id) {
+
+      if (conversations.length > 0 && storedClientId) {
+        // Look for a conversation that matches the stored client_id
+        const matchingConv = conversations.find(
+          (conv: any) => conv.client_id === storedClientId
+        );
+
+        if (matchingConv) {
+          // Use the existing conversation
+          conversationId = matchingConv.id;
+          conversationClientId = matchingConv.client_id;
+          lastConversationClientId = matchingConv.client_id;
           useExisting = true;
           // Ensure client_id is in localStorage
-          localStorage.setItem("ai-client-id", firstConv.client_id);
+          localStorage.setItem("ai-client-id", matchingConv.client_id);
         } else {
-          // Create a new conversation and update localStorage
-          const response = await fetch(`${options.apiBaseUrl}/conversation/`, {
-            method: "POST",
-            mode: "cors",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${options.apiKey}`,
-            },
-            body: JSON.stringify({ title: chatOptions.title }),
-          });
-          if (!response.ok) {
-            throw new Error(`Error creating conversation: ${response.status}`);
-          }
-          const data = await response.json();
-          conversationId = data.data.id;
-          conversationClientId = data.data.client_id;
-          if (conversationClientId) {
-            localStorage.setItem("ai-client-id", conversationClientId);
-          }
+          // No matching conversation found, conversation will be created on first message
+          conversationId = null;
+          conversationClientId = null;
           useExisting = false;
         }
       } else {
-        // No conversations, create a new one
-        const response = await fetch(`${options.apiBaseUrl}/conversation/`, {
-          method: "POST",
-          mode: "cors",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${options.apiKey}`,
-          },
-          body: JSON.stringify({ title: chatOptions.title }),
-        });
-        if (!response.ok) {
-          throw new Error(`Error creating conversation: ${response.status}`);
-        }
-        const data = await response.json();
-        conversationId = data.data.id;
-        conversationClientId = data.data.client_id;
-        if (conversationClientId) {
-          localStorage.setItem("ai-client-id", conversationClientId);
-        }
+        // No conversations or no stored client_id, conversation will be created on first message
+        conversationId = null;
+        conversationClientId = null;
         useExisting = false;
       }
 
@@ -500,27 +505,16 @@ export function createAssistant(options: AssistantOptions): Assistant {
 
       // Set the callback for the new conversation button
       chat.setOnNewConversation(async () => {
-        const response = await fetch(`${options.apiBaseUrl}/conversation/`, {
-          method: "POST",
-          mode: "cors",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${options.apiKey}`,
-          },
-          body: JSON.stringify({ title: chatOptions.title }),
-        });
-        if (response.ok) {
-          const data = await response.json();
-          conversationId = data.data.id;
-          conversationClientId = data.data.client_id;
-          if (conversationClientId) {
-            localStorage.setItem("ai-client-id", conversationClientId);
-          }
-          lastContext = "";
-          if (chat && typeof chat["clearMessages"] === "function") {
-            chat["clearMessages"]();
-          }
+        // Reset conversation - will be created on next message
+        conversationId = null;
+        conversationClientId = null;
+        lastContext = "";
+        // Clear messages in the UI
+        if (chat && typeof chat["clearMessages"] === "function") {
+          chat["clearMessages"]();
         }
+        // Clear the stored client_id so a new conversation will be created
+        localStorage.removeItem("ai-client-id");
       });
 
       // Load message history if using existing conversation

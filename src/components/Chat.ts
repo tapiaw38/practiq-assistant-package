@@ -1,3 +1,6 @@
+import { marked } from "marked";
+import katex from "katex";
+
 /**
  * Possible position for the chat window
  */
@@ -64,6 +67,8 @@ export interface ChatOptions {
   showImagesOption?: boolean;
   /** Enable audio answers (hide text, show audio player) */
   audioAnswers?: boolean;
+  /** Enable recording and sending audio messages */
+  audioInput?: boolean;
 }
 
 /**
@@ -71,14 +76,15 @@ export interface ChatOptions {
  * input auto-adjustment, animations, and customizable styles
  */
 export class Chat {
-  private container: HTMLDivElement;
-  private chatWindow: HTMLDivElement;
-  private messageList: HTMLDivElement;
-  private inputArea: HTMLDivElement;
+  private container!: HTMLDivElement;
+  private chatWindow!: HTMLDivElement;
+  private messageList!: HTMLDivElement;
+  private inputArea!: HTMLDivElement;
   private isOpen: boolean = false;
-  private options: Required<Omit<ChatOptions, "audioAnswers">> & {
+  private options: Required<Omit<ChatOptions, "audioAnswers" | "audioInput">> & {
     showImagesOption?: boolean;
     audioAnswers?: boolean;
+    audioInput?: boolean;
   };
   private onNewConversationCallback?: () => void;
   private newConvButton?: HTMLButtonElement;
@@ -86,6 +92,31 @@ export class Chat {
   private audioChunks: Blob[] = [];
   private isRecording: boolean = false;
   private recordingTimer?: number;
+
+  private getSendIconMarkup(): string {
+    return `
+      <svg class="ia-chat-btn-icon ia-chat-send-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 11.5L20 4l-4.8 16-3.6-5.1L4 11.5z"/>
+      </svg>
+    `;
+  }
+
+  private getRecordIconMarkup(recording: boolean = false): string {
+    if (recording) {
+      return `
+        <svg class="ia-chat-btn-icon ia-chat-record-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="6.5" fill="currentColor"/>
+        </svg>
+      `;
+    }
+
+    return `
+      <svg class="ia-chat-btn-icon ia-chat-record-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 14c1.66 0 3-1.34 3-3V6a3 3 0 10-6 0v5c0 1.66 1.34 3 3 3z"/>
+        <path d="M17 11a5 5 0 01-10 0H5a7 7 0 006 6.92V21h2v-3.08A7 7 0 0019 11h-2z"/>
+      </svg>
+    `;
+  }
 
   /**
    * Creates a new Chat instance
@@ -127,11 +158,15 @@ export class Chat {
       ...(typeof options.audioAnswers !== "undefined"
         ? { audioAnswers: !!options.audioAnswers }
         : {}),
+      ...(typeof options.audioInput !== "undefined"
+        ? { audioInput: !!options.audioInput }
+        : {}),
     };
 
     this.createChatElements();
     this.addEventListeners();
     this.loadStyles();
+    this.injectKatexCss();
     this.addInitialMessage();
 
     // Open the chat if specified in the options
@@ -161,23 +196,21 @@ export class Chat {
     title.className = "ia-chat-title";
     title.textContent = this.options.title;
 
+    const headerActions = document.createElement("div");
+    headerActions.className = "ia-chat-header-actions";
+
     // New conversation button (+)
     const newConvButton = document.createElement("button");
     newConvButton.className = "ia-chat-new-conv";
-    newConvButton.innerHTML = "Nueva conversación";
+    newConvButton.innerHTML = `
+      <svg class="ia-chat-btn-icon ia-chat-new-conv-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 5v14M5 12h14"/>
+      </svg>
+      <span class="ia-chat-new-conv-text">Nueva</span>
+    `;
     newConvButton.title = "Nueva conversación";
+    newConvButton.setAttribute("aria-label", "Nueva conversación");
     newConvButton.setAttribute("type", "button");
-    // Match close button style, but remove right margin
-    newConvButton.style.background = "none";
-    newConvButton.style.border = "none";
-    newConvButton.style.color = "white";
-    newConvButton.style.fontSize = "11px";
-    newConvButton.style.cursor = "pointer";
-    newConvButton.style.padding = "0";
-    newConvButton.style.marginLeft = "60px";
-    newConvButton.style.marginRight = "2px";
-    newConvButton.style.lineHeight = "1";
-    newConvButton.style.outline = "none";
 
     this.newConvButton = newConvButton;
     if (this.onNewConversationCallback) {
@@ -187,22 +220,18 @@ export class Chat {
     // Close button
     const closeButton = document.createElement("button");
     closeButton.className = "ia-chat-close";
-    closeButton.innerHTML = "&times;";
+    closeButton.innerHTML = `
+      <svg class="ia-chat-btn-icon ia-chat-close-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6 6l12 12M18 6L6 18"/>
+      </svg>
+    `;
     closeButton.setAttribute("aria-label", "Close chat");
     closeButton.setAttribute("type", "button");
-    closeButton.style.background = "none";
-    closeButton.style.border = "none";
-    closeButton.style.color = "white";
-    closeButton.style.fontSize = "24px";
-    closeButton.style.cursor = "pointer";
-    closeButton.style.padding = "0";
-    closeButton.style.marginLeft = "0";
-    closeButton.style.lineHeight = "1";
-    closeButton.style.outline = "none";
 
     header.appendChild(title);
-    header.appendChild(newConvButton);
-    header.appendChild(closeButton);
+    headerActions.appendChild(newConvButton);
+    headerActions.appendChild(closeButton);
+    header.appendChild(headerActions);
 
     // Message list
     this.messageList = document.createElement("div");
@@ -251,31 +280,26 @@ export class Chat {
     textarea.style.resize = "none";
     textarea.setAttribute("aria-label", "Message");
 
-    // Create buttons based on audioAnswers setting
+    // Create buttons based on audio input setting
     console.log(
-      "Creating buttons with audioAnswers:",
-      this.options.audioAnswers
+      "Creating buttons with audioInput:",
+      this.options.audioInput
     );
 
-    if (this.options.audioAnswers) {
+    if (this.options.audioInput) {
       console.log("Creating both send and record buttons");
 
       // Create send button
       const sendButton = document.createElement("button");
       sendButton.className = "ia-chat-send";
-      sendButton.innerHTML = "&#10148;";
+      sendButton.innerHTML = this.getSendIconMarkup();
       sendButton.setAttribute("aria-label", "Send message");
       sendButton.setAttribute("type", "button");
 
       // Create record button
       const recordButton = document.createElement("button");
       recordButton.className = "ia-chat-record";
-      recordButton.innerHTML = `
-        <svg viewBox="0 0 24 24" width="20" height="20">
-          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-          <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-        </svg>
-      `;
+      recordButton.innerHTML = this.getRecordIconMarkup();
       recordButton.setAttribute("aria-label", "Record audio message");
       recordButton.setAttribute("type", "button");
       recordButton.title = "Mantén presionado para grabar audio";
@@ -291,7 +315,7 @@ export class Chat {
       // Create only send button
       const sendButton = document.createElement("button");
       sendButton.className = "ia-chat-send";
-      sendButton.innerHTML = "&#10148;";
+      sendButton.innerHTML = this.getSendIconMarkup();
       sendButton.setAttribute("aria-label", "Send message");
       sendButton.setAttribute("type", "button");
 
@@ -324,7 +348,7 @@ export class Chat {
     });
 
     // Handle action buttons
-    if (this.options.audioAnswers) {
+    if (this.options.audioInput) {
       // Setup both send and record buttons
       const sendButton = this.chatWindow.querySelector(
         ".ia-chat-send"
@@ -472,11 +496,7 @@ export class Chat {
         ".ia-chat-record"
       ) as HTMLButtonElement;
       recordButton.classList.add("recording");
-      recordButton.innerHTML = `
-        <svg viewBox="0 0 24 24" width="20" height="20">
-          <circle cx="12" cy="12" r="8" fill="red"/>
-        </svg>
-      `;
+      recordButton.innerHTML = this.getRecordIconMarkup(true);
 
       this.mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -514,12 +534,7 @@ export class Chat {
         ".ia-chat-record"
       ) as HTMLButtonElement;
       recordButton.classList.remove("recording");
-      recordButton.innerHTML = `
-        <svg viewBox="0 0 24 24" width="20" height="20">
-          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-          <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-        </svg>
-      `;
+      recordButton.innerHTML = this.getRecordIconMarkup();
     }
   }
 
@@ -801,6 +816,65 @@ export class Chat {
    * @param sender Message sender (user, assistant, error)
    * @param isHtml Whether the text contains HTML (only for assistant messages)
    */
+
+  /** Inject KaTeX CSS once into the document head */
+  private injectKatexCss(): void {
+    const ID = "ia-katex-css";
+    if (document.getElementById(ID)) return;
+    // Inline the essential KaTeX CSS subset via a CDN link so the package
+    // doesn't need to bundle the font files itself.
+    const link = document.createElement("link");
+    link.id = ID;
+    link.rel = "stylesheet";
+    link.href = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css";
+    document.head.appendChild(link);
+  }
+
+  /** Render markdown + math (KaTeX) for assistant messages */
+  private renderMarkdownAndMath(text: string): string {
+    if (!text?.trim()) return "";
+
+    // 1. Stash fenced code blocks
+    const fenced: string[] = [];
+    let s = text.replace(/```[\s\S]*?```/g, (m) => {
+      fenced.push(m);
+      return `\x00FENCED${fenced.length - 1}\x00`;
+    });
+
+    // 2. Stash inline code
+    const inlined: string[] = [];
+    s = s.replace(/`[^`\n]+`/g, (m) => {
+      inlined.push(m);
+      return `\x00INLINED${inlined.length - 1}\x00`;
+    });
+
+    // 3. Block math  $$...$$
+    s = s.replace(/\$\$([\s\S]+?)\$\$/g, (_, math) => {
+      try {
+        return katex.renderToString(math.trim(), { displayMode: true, throwOnError: false, output: "html" });
+      } catch {
+        return `<code>$$${math}$$</code>`;
+      }
+    });
+
+    // 4. Inline math  $...$
+    s = s.replace(/(?<!\$)\$(?!\$)([^\n$]+?)(?<!\$)\$(?!\$)/g, (_, math) => {
+      try {
+        return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false, output: "html" });
+      } catch {
+        return `<code>$${math}$</code>`;
+      }
+    });
+
+    // 5. Restore stashes
+    inlined.forEach((v, i) => { s = s.replace(`\x00INLINED${i}\x00`, v); });
+    fenced.forEach((v, i)  => { s = s.replace(`\x00FENCED${i}\x00`,  v); });
+
+    // 6. Markdown → HTML  (marked preserves inline HTML like <img>)
+    marked.setOptions({ breaks: true, gfm: true } as any);
+    return marked.parse(s) as string;
+  }
+
   private addMessage(
     text: string,
     sender: "user" | "assistant" | "error",
@@ -824,19 +898,14 @@ export class Chat {
       }
     }
 
-    if (isHtml && sender === "assistant") {
-      // If the message is HTML, sanitize it before inserting
-      messageElement.innerHTML = this.sanitizeHtml(displayText);
+    if (sender === "assistant") {
+      // Markdown + math rendering for all assistant messages
+      messageElement.classList.add("ia-md");
+      messageElement.innerHTML = this.renderMarkdownAndMath(displayText);
     } else {
-      // Sanitize the text (prevent XSS)
+      // User / error: escape text only
       const sanitizedText = this.sanitizeText(displayText);
-
-      // Format text (looking for URLs, etc.) - but skip link formatting if audioAnswers is enabled
-      const formattedText =
-        this.options.audioAnswers && sender === "assistant"
-          ? this.formatTextWithoutLinks(sanitizedText)
-          : this.formatText(sanitizedText);
-
+      const formattedText = this.formatText(sanitizedText);
       messageElement.innerHTML = formattedText;
     }
 
@@ -1125,6 +1194,14 @@ export class Chat {
   }
 
   /**
+   * Gets audio input setting from options
+   * @returns boolean indicating if audio recording is enabled
+   */
+  public getAudioInput(): boolean {
+    return !!this.options.audioInput;
+  }
+
+  /**
    * Sets the callback for the new conversation button
    */
   public setOnNewConversation(callback: () => void): void {
@@ -1189,14 +1266,18 @@ export class Chat {
         position: absolute;
         width: ${this.options.width}px;
         height: ${this.options.height}px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 251, 253, 0.98) 100%);
         background-color: ${backgroundColor};
-        border-radius: 10px;
-        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(18, 60, 82, 0.10);
+        border-radius: 24px;
+        box-shadow: 0 24px 64px rgba(11, 38, 52, 0.22);
+        backdrop-filter: blur(14px);
         display: flex;
         flex-direction: column;
         overflow: hidden;
         pointer-events: auto;
-        transition: all 0.3s ease;
+        transition: transform 0.24s ease, opacity 0.24s ease, box-shadow 0.24s ease;
       }
       
       .ia-chat-window.bottom-right {
@@ -1220,83 +1301,200 @@ export class Chat {
       }
       
       .ia-chat-header {
-        background-color: ${primaryColor};
+        background:
+          linear-gradient(135deg, ${primaryColor} 0%, ${this.darkenColor(primaryColor || "#4a90e2", 12)} 100%);
         color: white;
-        padding: 12px 16px;
+        padding: 16px 18px 14px;
         display: flex;
         justify-content: space-between;
         align-items: center;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      }
+
+      .ia-chat-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-left: 12px;
       }
       
       .ia-chat-title {
-        font-weight: bold;
+        font-weight: 700;
         color: white;
-        font-size: 1.08em;
+        font-size: 15px;
+        letter-spacing: 0.01em;
+        display: block;
+        margin: 0;
+      }
+
+      .ia-chat-new-conv,
+      .ia-chat-close {
+        appearance: none;
+        border: none;
+        background: rgba(255, 255, 255, 0.14);
+        color: white;
+        cursor: pointer;
+        outline: none;
+        transition: background-color 0.18s ease, transform 0.18s ease, opacity 0.18s ease;
+      }
+
+      .ia-chat-btn-icon {
+        width: 16px;
+        height: 16px;
         display: inline-block;
-        margin-bottom: 2px;
+        flex-shrink: 0;
+      }
+
+      .ia-chat-btn-icon path,
+      .ia-chat-btn-icon circle {
+        vector-effect: non-scaling-stroke;
+      }
+
+      .ia-chat-new-conv:hover,
+      .ia-chat-close:hover {
+        background: rgba(255, 255, 255, 0.22);
+        transform: translateY(-1px);
+      }
+      
+      .ia-chat-new-conv {
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 11px;
+        line-height: 1;
+        font-weight: 600;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        letter-spacing: 0.01em;
+      }
+
+      .ia-chat-new-conv-icon,
+      .ia-chat-close-icon {
+        stroke: currentColor;
+        stroke-width: 2;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
       }
       
       .ia-chat-close {
-        background: none;
-        border: none;
-        color: white;
-        font-size: 24px;
-        cursor: pointer;
-        padding: 0;
-        margin-left: 10px;
+        border-radius: 999px;
+        width: 32px;
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
         line-height: 1;
-        outline: none; /* Prevent the outline from being displayed on click */
+        padding: 0;
       }
-      
-      /* Prevent focus visual effects on close button */
+
+      /* Prevent focus visual effects on header buttons */
+      .ia-chat-new-conv:focus,
       .ia-chat-close:focus {
         outline: none;
-        box-shadow: none;
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18);
       }
       
       .ia-chat-messages {
         flex: 1;
         overflow-y: auto;
-        padding: 16px;
+        padding: 18px 16px 16px;
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 10px;
+        background:
+          radial-gradient(circle at top left, rgba(18, 60, 82, 0.04), transparent 34%),
+          linear-gradient(180deg, rgba(248, 251, 253, 0.96) 0%, rgba(255, 255, 255, 1) 100%);
       }
       
       .ia-chat-message {
-        padding: 10px 14px;
-        border-radius: 16px;
-        max-width: 80%;
+        padding: 12px 14px;
+        border-radius: 18px;
+        max-width: 84%;
         word-break: break-word;
-        line-height: 1.4;
+        line-height: 1.5;
+        font-size: 14px;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+        border: 1px solid transparent;
       }
       
       .ia-chat-message.user {
-        background-color: ${userMessageBgColor};
+        background:
+          linear-gradient(135deg, ${userMessageBgColor} 0%, ${this.darkenColor(userMessageBgColor || primaryColor || "#4a90e2", 12)} 100%);
         color: ${userMessageTextColor};
         align-self: flex-end;
-        border-bottom-right-radius: 4px;
+        border-bottom-right-radius: 6px;
       }
       
       .ia-chat-message.assistant {
         background-color: ${assistantMessageBgColor};
         color: ${assistantMessageTextColor};
         align-self: flex-start;
-        border-bottom-left-radius: 4px;
+        border: 1px solid rgba(18, 60, 82, 0.08);
+        border-bottom-left-radius: 6px;
       }
       
       .ia-chat-message.error {
         background-color: #ffe6e6;
         color: #d32f2f;
         align-self: flex-start;
-        border-bottom-left-radius: 4px;
+        border: 1px solid rgba(211, 47, 47, 0.18);
+        border-bottom-left-radius: 6px;
       }
-      
+
+      /* Markdown + math typography */
+      .ia-md { line-height: 1.7; overflow-wrap: break-word; }
+      .ia-md p { margin: 0 0 8px; }
+      .ia-md p:last-child { margin-bottom: 0; }
+      .ia-md strong { font-weight: 700; }
+      .ia-md em { font-style: italic; }
+      .ia-md h1, .ia-md h2, .ia-md h3 { font-weight: 700; margin: 12px 0 5px; line-height: 1.3; }
+      .ia-md h1 { font-size: 1.1em; }
+      .ia-md h2 { font-size: 1.05em; }
+      .ia-md h3 { font-size: 1em; }
+      .ia-md ul, .ia-md ol { padding-left: 18px; margin: 4px 0 8px; }
+      .ia-md li { margin-bottom: 3px; }
+      .ia-md code {
+        background: rgba(0,0,0,0.08);
+        border-radius: 4px;
+        padding: 1px 5px;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 0.87em;
+      }
+      .ia-md pre {
+        background: #1e1e2e;
+        color: #cdd6f4;
+        border-radius: 8px;
+        padding: 12px 14px;
+        overflow-x: auto;
+        margin: 6px 0;
+        font-size: 0.84em;
+        line-height: 1.5;
+      }
+      .ia-md pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+      .ia-md blockquote {
+        border-left: 3px solid ${primaryColor};
+        padding: 4px 10px;
+        margin: 6px 0;
+        opacity: 0.85;
+      }
+      .ia-md table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 0.9em; }
+      .ia-md th, .ia-md td { border: 1px solid rgba(0,0,0,0.15); padding: 5px 8px; text-align: left; }
+      .ia-md th { font-weight: 700; background: rgba(0,0,0,0.05); }
+      .ia-md hr { border: none; border-top: 1px solid rgba(0,0,0,0.12); margin: 10px 0; }
+      .ia-md a { color: ${primaryColor}; text-decoration: underline; }
+      .ia-md .katex-display { margin: 8px 0; overflow-x: auto; }
+      .ia-md .katex { font-size: 1.05em; }
+
       .ia-chat-input-area {
-        padding: 12px;
-        border-top: 1px solid #e0e0e0;
+        padding: 12px 14px 14px;
+        border-top: 1px solid rgba(18, 60, 82, 0.08);
         display: flex;
         align-items: flex-end;
+        gap: 8px;
+        background: rgba(255, 255, 255, 0.96);
       }
       
       .ia-chat-input-wrapper {
@@ -1308,19 +1506,21 @@ export class Chat {
       .ia-chat-input {
         flex: 1;
         border: 1px solid ${inputBorderColor};
-        border-radius: 20px;
-        padding: 10px 14px;
+        border-radius: 18px;
+        padding: 11px 14px;
         font-family: inherit;
+        font-size: 14px;
         resize: none;
         box-sizing: border-box;
         outline: none;
-        transition: height 0.1s ease-out, border-color 0.2s;
+        transition: height 0.1s ease-out, border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
         line-height: 1.4;
         min-height: 42px !important;
         max-height: 120px;
         overflow-y: hidden !important; /* Force hide vertical scroll by default */
         background-color: ${inputBgColor};
         color: ${inputTextColor};
+        box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
       }
       
       .ia-chat-input.multiline {
@@ -1329,67 +1529,94 @@ export class Chat {
       
       .ia-chat-input:focus {
         border-color: ${primaryColor};
+        box-shadow: 0 0 0 4px rgba(18, 60, 82, 0.08);
       }
       
-      .ia-chat-send {
-        background-color: ${primaryColor};
+      .ia-chat-send,
+      .ia-chat-record {
+        appearance: none;
+        -webkit-appearance: none;
+        background: linear-gradient(135deg, ${primaryColor} 0%, ${this.darkenColor(primaryColor || "#4a90e2", 10)} 100%);
         color: white;
         border: none;
         border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        margin-left: 8px;
+        width: 42px;
+        height: 42px;
+        min-width: 42px;
+        min-height: 42px;
+        aspect-ratio: 1 / 1;
+        padding: 0;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
         font-size: 18px;
-        transition: background-color 0.2s;
+        transition: background-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
         outline: none; /* Prevent the outline from being displayed on click */
+        box-shadow: 0 10px 18px rgba(18, 60, 82, 0.20);
+        flex-shrink: 0;
+        position: relative;
+        overflow: hidden;
+        box-sizing: border-box;
+      }
+
+      .ia-chat-send::before,
+      .ia-chat-record::before,
+      .ia-audio-play-btn::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0));
+        pointer-events: none;
+      }
+
+      .ia-chat-send .ia-chat-btn-icon,
+      .ia-chat-record .ia-chat-btn-icon {
+        width: 18px;
+        height: 18px;
+        position: relative;
+        z-index: 1;
+      }
+
+      .ia-chat-send-icon {
+        fill: currentColor;
+        transform: translateX(1px) rotate(-8deg);
+      }
+
+      .ia-chat-record-icon {
+        fill: currentColor;
       }
       
-      .ia-chat-send:hover {
+      .ia-chat-send:hover,
+      .ia-chat-record:hover {
         background-color: ${this.darkenColor(primaryColor || "#4a90e2", 10)};
+        transform: translateY(-1px);
+        box-shadow: 0 14px 22px rgba(18, 60, 82, 0.24);
+      }
+
+      .ia-chat-send:active,
+      .ia-chat-record:active,
+      .ia-audio-play-btn:active,
+      .ia-chat-new-conv:active,
+      .ia-chat-close:active {
+        transform: translateY(0) scale(0.98);
       }
       
       /* Prevent focus visual effects on send button */
-      .ia-chat-send:focus {
+      .ia-chat-send:focus,
+      .ia-chat-record:focus {
         outline: none;
-        box-shadow: none;
+        box-shadow: 0 0 0 4px rgba(18, 60, 82, 0.12), 0 10px 18px rgba(18, 60, 82, 0.20);
       }
-      
-      /* Record button styles */
+
       .ia-chat-record {
-        background-color: ${primaryColor};
-        color: white;
-        border: none;
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        margin-left: 8px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 18px;
-        transition: all 0.2s;
-        outline: none;
         user-select: none;
       }
       
-      .ia-chat-record:hover {
-        background-color: ${this.darkenColor(primaryColor || "#4a90e2", 10)};
-        transform: scale(1.05);
-      }
-      
       .ia-chat-record.recording {
-        background-color: #ff4444;
+        background: linear-gradient(135deg, #ff5d5d 0%, #dc2626 100%);
         animation: pulse 1s infinite;
-      }
-      
-      .ia-chat-record:focus {
-        outline: none;
-        box-shadow: none;
+        box-shadow: 0 16px 26px rgba(255, 68, 68, 0.32);
       }
       
       @keyframes pulse {
@@ -1399,44 +1626,11 @@ export class Chat {
       }
       
       /* Audio container styles */
-      .ia-audio-container {
-        margin-top: 8px;
-      }
-      
-      .ia-audio-play-btn {
-        background-color: ${primaryColor};
-        color: white;
-        border: none;
-        border-radius: 20px;
-        padding: 8px 12px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 14px;
-        transition: background-color 0.2s;
-      }
-      
-      .ia-audio-play-btn:hover {
-        background-color: ${this.darkenColor(primaryColor || "#4a90e2", 10)};
-      }
-      
-      .ia-audio-icon {
-        width: 16px;
-        height: 16px;
-        fill: currentColor;
-      }
-      
-      .ia-audio-player {
-        margin-top: 8px;
-        width: 100%;
-      }
-      
       /* Typing indicator */
       .typing {
         display: flex;
         align-items: center;
-        padding: 8px 14px;
+        padding: 10px 14px;
       }
       
       .ia-typing-dot {
@@ -1470,8 +1664,49 @@ export class Chat {
       /* Responsive */
       @media (max-width: 480px) {
         .ia-chat-window {
-          width: calc(100% - 40px);
-          height: 70vh;
+          width: calc(100% - 20px);
+          height: min(78vh, 680px);
+          left: 10px !important;
+          right: 10px !important;
+          bottom: 10px !important;
+          top: auto !important;
+          border-radius: 22px;
+        }
+
+        .ia-chat-header {
+          padding: 14px;
+        }
+
+        .ia-chat-header-actions {
+          gap: 8px;
+        }
+
+        .ia-chat-new-conv {
+          padding: 7px 10px;
+          font-size: 10px;
+        }
+
+        .ia-chat-new-conv-text {
+          display: none;
+        }
+
+        .ia-chat-new-conv {
+          width: 32px;
+          height: 32px;
+          padding: 0;
+          justify-content: center;
+        }
+
+        .ia-chat-messages {
+          padding: 14px 12px;
+        }
+
+        .ia-chat-input-area {
+          padding: 10px 12px 12px;
+        }
+
+        .ia-chat-message {
+          max-width: 90%;
         }
       }
       
@@ -1520,9 +1755,8 @@ export class Chat {
       }
 
       .ia-chat-checkbox-container {
-        padding: 12px 12px;
-        border-top: 1px solid #e0e0e0;
-        background-color: #f8f9fa;
+        padding: 10px 14px 0;
+        background-color: rgba(255, 255, 255, 0.96);
         display: flex;
         align-items: center;
         gap: 8px;
@@ -1537,10 +1771,11 @@ export class Chat {
 
       .ia-chat-checkbox-label {
         font-size: 12px;
-        color: ${primaryColor};
+        color: ${assistantMessageTextColor};
         cursor: pointer;
         user-select: none;
         margin: 0;
+        opacity: 0.82;
       }
       
       .ia-chat-checkbox-label:hover {
@@ -1561,8 +1796,8 @@ export class Chat {
       }
 
       .ia-chat-message p {
-        margin: 5px 0;
-        line-height: 1.4;
+        margin: 6px 0;
+        line-height: 1.5;
       }
 
       .ia-audio-player {
@@ -1575,37 +1810,34 @@ export class Chat {
         display: flex;
         flex-direction: column;
         gap: 8px;
-        max-width: 250px;
+        max-width: 260px;
       }
 
       .ia-audio-play-btn {
-        background-color: ${primaryColor};
+        background:
+          linear-gradient(135deg, ${primaryColor} 0%, ${this.darkenColor(primaryColor || "#4a90e2", 12)} 100%);
         color: white;
         border: none;
-        border-radius: 20px;
+        border-radius: 999px;
         padding: 10px 16px;
         cursor: pointer;
         font-size: 14px;
-        font-weight: 500;
+        font-weight: 600;
         transition: all 0.2s ease;
         outline: none;
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        min-width: 120px;
+        box-shadow: 0 10px 18px rgba(18, 60, 82, 0.18);
+        min-width: 132px;
         justify-content: center;
+        position: relative;
+        overflow: hidden;
       }
 
       .ia-audio-play-btn:hover {
-        background-color: ${this.darkenColor(primaryColor || "#4a90e2", 10)};
         transform: translateY(-1px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-      }
-
-      .ia-audio-play-btn:active {
-        transform: translateY(0);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-shadow: 0 14px 24px rgba(18, 60, 82, 0.22);
       }
 
       .ia-audio-icon {

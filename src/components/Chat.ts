@@ -127,8 +127,8 @@ export class Chat {
       title: options.title || "IA Assistant",
       placeholder: options.placeholder || "Write your message here...",
       position: options.position || "bottom-right",
-      width: options.width || 350,
-      height: options.height || 450,
+      width: options.width || 300,
+      height: options.height || 400,
       onSend: options.onSend || (async (message) => `Received: ${message}`),
       initialMessage: options.initialMessage || "Hello, how can I help you?",
       theme: {
@@ -304,6 +304,9 @@ export class Chat {
       recordButton.setAttribute("type", "button");
       recordButton.title = "Mantén presionado para grabar audio";
 
+      // Start with send hidden, mic visible (toggles on input)
+      sendButton.style.display = "none";
+
       // Add textarea and both buttons to input area
       textareaWrapper.appendChild(textarea);
       this.inputArea.appendChild(textareaWrapper);
@@ -395,9 +398,16 @@ export class Chat {
       }
     });
 
-    // Auto-adjust on each content change
+    // Auto-adjust on each content change + toggle send/record visibility
     textarea.addEventListener("input", () => {
       this.autoResizeTextarea(textarea);
+      if (this.options.audioInput) {
+        const sendBtn = this.chatWindow.querySelector(".ia-chat-send") as HTMLButtonElement | null;
+        const recBtn  = this.chatWindow.querySelector(".ia-chat-record") as HTMLButtonElement | null;
+        const hasText = textarea.value.trim().length > 0;
+        if (sendBtn) sendBtn.style.display = hasText ? "" : "none";
+        if (recBtn)  recBtn.style.display  = hasText ? "none" : "";
+      }
     });
 
     // Also adjust on focus
@@ -746,6 +756,13 @@ export class Chat {
     textarea.style.height = "42px";
     textarea.style.minHeight = "42px";
     textarea.style.overflowY = "hidden";
+    // Restore mic button after send
+    if (this.options.audioInput) {
+      const sendBtn = this.chatWindow.querySelector(".ia-chat-send") as HTMLButtonElement | null;
+      const recBtn  = this.chatWindow.querySelector(".ia-chat-record") as HTMLButtonElement | null;
+      if (sendBtn) sendBtn.style.display = "none";
+      if (recBtn)  recBtn.style.display  = "";
+    }
   }
 
   /**
@@ -830,9 +847,18 @@ export class Chat {
     document.head.appendChild(link);
   }
 
+  /** Strip system analysis labels that leak into AI responses */
+  private stripSystemLabels(text: string): string {
+    return text
+      .replace(/^(RESPONSE_CONTEXT|KEY_FINDINGS|TEXT_FOUND|EXTRACTED_TEXT|IMAGE_ANALYSIS)\s*:\s*/gim, "")
+      .replace(/^\[Attached image analysis\]\n?/gim, "")
+      .trim()
+  }
+
   /** Render markdown + math (KaTeX) for assistant messages */
   private renderMarkdownAndMath(text: string): string {
     if (!text?.trim()) return "";
+    text = this.stripSystemLabels(text);
 
     // 1. Stash fenced code blocks
     const fenced: string[] = [];
@@ -1264,8 +1290,8 @@ export class Chat {
       
       .ia-chat-window {
         position: absolute;
-        width: ${this.options.width}px;
-        height: ${this.options.height}px;
+        width: min(${this.options.width}px, calc(100vw - 32px));
+        height: min(${this.options.height}px, calc(100vh - 120px));
         background:
           linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 251, 253, 0.98) 100%);
         background-color: ${backgroundColor};
@@ -1410,13 +1436,13 @@ export class Chat {
       }
       
       .ia-chat-message {
-        padding: 12px 14px;
-        border-radius: 18px;
+        padding: 10px 12px;
+        border-radius: 16px;
         max-width: 84%;
         word-break: break-word;
         line-height: 1.5;
-        font-size: 14px;
-        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+        font-size: 13px;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
         border: 1px solid transparent;
       }
       
@@ -1551,7 +1577,7 @@ export class Chat {
         align-items: center;
         justify-content: center;
         font-size: 18px;
-        transition: background-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+        transition: background-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease, opacity 0.15s ease, scale 0.15s ease;
         outline: none; /* Prevent the outline from being displayed on click */
         box-shadow: 0 10px 18px rgba(18, 60, 82, 0.20);
         flex-shrink: 0;

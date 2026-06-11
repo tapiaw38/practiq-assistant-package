@@ -4,29 +4,17 @@
  * @module assistant-ia
  */
 
-import {
-  Notification,
-  NotificationType,
-  NotificationOptions,
-} from "./core/Notification";
+import { Notification, type NotificationType, type NotificationOptions } from "./core/Notification";
 import {
   FloatingButton,
-  FloatingButtonOptions,
-  FloatingButtonPosition,
-  ButtonSize,
+  type FloatingButtonOptions,
+  type FloatingButtonPosition,
+  type ButtonSize,
 } from "./components/FloatingButton";
-import { Chat, ChatOptions, ChatTheme, ChatPosition } from "./components/Chat";
-import { createAssistant, AssistantOptions } from "./core/Assistant";
+import { Chat, type ChatOptions, type ChatTheme, type ChatPosition } from "./components/Chat";
+import { createAssistant, type Assistant, type AssistantOptions } from "./core/Assistant";
 
-// Export main components
-export {
-  // Main components
-  Notification,
-  FloatingButton,
-  Chat,
-  createAssistant,
-
-  // Types
+export type {
   NotificationType,
   NotificationOptions,
   FloatingButtonOptions,
@@ -35,7 +23,15 @@ export {
   ChatOptions,
   ChatTheme,
   ChatPosition,
+  Assistant,
   AssistantOptions,
+};
+
+export {
+  Notification,
+  FloatingButton,
+  Chat,
+  createAssistant,
 };
 
 // Export public API for direct use

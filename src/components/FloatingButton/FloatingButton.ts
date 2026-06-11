@@ -2,10 +2,12 @@ export interface FloatingButtonOptions {
   backgroundColor?: string;
   color?: string;
   icon?: string;
+  avatarUrl?: string;
   size?: "small" | "medium" | "large";
   position?: "bottom-right" | "bottom-left" | "top-right" | "top-left";
   onClick?: () => void;
   text?: string;
+  container?: HTMLElement | string;
 }
 
 export class FloatingButton {
@@ -17,10 +19,12 @@ export class FloatingButton {
       backgroundColor: options.backgroundColor || "#4a90e2",
       color: options.color || "#ffffff",
       icon: options.icon || "💬",
+      avatarUrl: options.avatarUrl || "",
       size: options.size || "medium",
       position: options.position || "bottom-right",
       onClick: options.onClick || (() => {}),
       text: options.text || "",
+      container: options.container || document.body,
     };
 
     this.element = document.createElement("button");
@@ -28,7 +32,8 @@ export class FloatingButton {
   }
 
   private render(): void {
-    const { backgroundColor, color, icon, size, position, text } = this.options;
+    const { backgroundColor, color, icon, avatarUrl, size, position, text } =
+      this.options;
 
     // Set classes and styles
     this.element.className = `floating-button ${size} ${position}`;
@@ -37,7 +42,18 @@ export class FloatingButton {
     this.element.setAttribute("aria-label", "Open chat");
 
     // Button content
-    this.element.innerHTML = icon;
+    this.element.replaceChildren();
+    if (avatarUrl) {
+      const avatar = document.createElement("img");
+      avatar.src = avatarUrl;
+      avatar.alt = "";
+      avatar.className = "floating-button-avatar";
+      this.element.appendChild(avatar);
+    } else {
+      const iconSpan = document.createElement("span");
+      iconSpan.innerHTML = icon;
+      this.element.appendChild(iconSpan);
+    }
     if (text) {
       const textSpan = document.createElement("span");
       textSpan.textContent = text;
@@ -106,6 +122,13 @@ export class FloatingButton {
         transform: scale(1.1);
         box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
       }
+
+      .floating-button-avatar {
+        width: 72%;
+        height: 72%;
+        object-fit: contain;
+        display: block;
+      }
       
       .floating-button.small {
         width: 40px;
@@ -167,7 +190,8 @@ export class FloatingButton {
 
   public setIcon(icon: string): void {
     this.options.icon = icon;
-    this.element.innerHTML = icon;
+    this.options.avatarUrl = "";
+    this.render();
   }
 
   public setSize(size: "small" | "medium" | "large"): void {
@@ -186,5 +210,17 @@ export class FloatingButton {
       /bottom-right|bottom-left|top-right|top-left/,
       position
     );
+  }
+
+  public setOnClick(onClick: () => void): void {
+    this.options.onClick = onClick;
+  }
+
+  public hide(): void {
+    this.element.style.display = "none";
+  }
+
+  public show(): void {
+    this.element.style.display = "flex";
   }
 }

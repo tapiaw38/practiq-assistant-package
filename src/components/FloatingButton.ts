@@ -24,6 +24,8 @@ export interface FloatingButtonOptions {
   color?: string;
   /** Content of the button (icon or text) */
   icon?: string;
+  /** Avatar image shown instead of the icon */
+  avatarUrl?: string;
   /** Size of the button */
   size?: ButtonSize;
   /** Function to execute when the button is clicked */
@@ -41,7 +43,7 @@ export interface FloatingButtonOptions {
  * that can be positioned in any of the 4 corners of the screen
  */
 export class FloatingButton {
-  private button: HTMLButtonElement;
+  private button!: HTMLButtonElement;
   private options: Required<FloatingButtonOptions>;
   private mounted: boolean = false;
 
@@ -50,19 +52,19 @@ export class FloatingButton {
    */
   private readonly sizes = {
     small: {
-      width: "40px",
-      height: "40px",
-      fontSize: "18px",
+      width: "34px",
+      height: "34px",
+      fontSize: "15px",
     },
     medium: {
+      width: "46px",
+      height: "46px",
+      fontSize: "20px",
+    },
+    large: {
       width: "56px",
       height: "56px",
       fontSize: "24px",
-    },
-    large: {
-      width: "72px",
-      height: "72px",
-      fontSize: "30px",
     },
   };
 
@@ -77,6 +79,7 @@ export class FloatingButton {
       backgroundColor: options.backgroundColor || "#4a90e2",
       color: options.color || "#ffffff",
       icon: options.icon || "💬",
+      avatarUrl: options.avatarUrl || "",
       size: options.size || "medium",
       onClick: options.onClick || (() => {}),
       container: options.container || document.body,
@@ -95,7 +98,18 @@ export class FloatingButton {
     this.button.className =
       `floating-button ${this.options.size} ${this.options.position} ${this.options.className}`.trim();
     // Support for Material Design icons
-    if (this.options.icon) {
+    if (this.options.avatarUrl) {
+      const avatar = document.createElement("img");
+      avatar.src = this.options.avatarUrl;
+      avatar.alt = "";
+      Object.assign(avatar.style, {
+        width: "72%",
+        height: "72%",
+        objectFit: "contain",
+        display: "block",
+      });
+      this.button.replaceChildren(avatar);
+    } else if (this.options.icon) {
       if (this.options.icon.startsWith("material:")) {
         const iconName = this.options.icon.replace("material:", "");
         this.button.innerHTML = `<span class="material-icons">${iconName}</span>`;
@@ -210,7 +224,18 @@ export class FloatingButton {
 
     // Update content
     if (options.icon !== undefined) {
-      if (options.icon.startsWith("material:")) {
+      if (this.options.avatarUrl) {
+        const avatar = document.createElement("img");
+        avatar.src = this.options.avatarUrl;
+        avatar.alt = "";
+        Object.assign(avatar.style, {
+          width: "72%",
+          height: "72%",
+          objectFit: "contain",
+          display: "block",
+        });
+        this.button.replaceChildren(avatar);
+      } else if (options.icon.startsWith("material:")) {
         const iconName = options.icon.replace("material:", "");
         this.button.innerHTML = `<span class="material-icons">${iconName}</span>`;
       } else {

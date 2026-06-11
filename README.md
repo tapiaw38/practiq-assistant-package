@@ -1,6 +1,6 @@
-# Nymia IA Assistant
+# Practiq Assistant Package
 
-Library to easily integrate an IA assistant chat into any web application in an easy and customizable way.
+Library to integrate the Practiq assistant chat into any web application in a simple and customizable way.
 
 ## Features
 
@@ -14,19 +14,19 @@ Library to easily integrate an IA assistant chat into any web application in an 
 ## Installation
 
 ```bash
-npm install nymia-ai-assistant
+npm install practiq-assistant-package
 ```
 
 or
 
 ```bash
-yarn add nymia-ai-assistant
+yarn add practiq-assistant-package
 ```
 
 ## Basic Usage
 
 ```javascript
-import { createAssistant } from "nymia-ai-assistant";
+import { createAssistant } from "practiq-assistant-package";
 
 // Create an assistant with minimal configuration
 const assistant = createAssistant({
@@ -46,18 +46,20 @@ const assistant = createAssistant({
 ```javascript
 // Assistant with full configuration
 const assistant = createAssistant({
-  // API Key for the assistant (required)
-  apiKey: "your-api-key",
   // API URL for the assistant server (required)
   apiBaseUrl: "http://localhost:8000",
+  // Auth token or API key for the assistant server (required)
+  authToken: "your-session-token",
   // General options
-  title: "My Assistant",
+  title: "Practiq Assistant",
   placeholder: "How can I help you?",
   position: "bottom-right", // 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left'
   initialMessage: "Hello! I am your virtual assistant. How can I help you?",
   autoOpen: false, // If true, the chat will open automatically
   // Experimental: Enable image search in responses (may slow down replies)
   searchImages: false, // If true, the assistant will try to include images in the response. This is experimental and may make responses slower,
+  // Enable recording and sending audio messages from chat
+  audioInput: false, // If true, chat shows microphone button to record and send audio
   // Enable audio responses (replaces text with audio player)
   audioAnswers: false, // If true, assistant responses will be played as audio with a WhatsApp-style play button
   // Specific button options
@@ -65,6 +67,7 @@ const assistant = createAssistant({
     backgroundColor: "#4a90e2",
     color: "#ffffff",
     icon: "💬", // Emoticon or HTML for the button
+    avatarUrl: "https://example.com/robot.png", // Optional avatar image
     size: "medium", // 'small' | 'medium' | 'large'
     container: "#my-container", // Selector or element where to mount the button
   },
@@ -131,6 +134,24 @@ const assistant = createAssistant({
 - Clean audio player interface
 - Automatic detection of audio URLs in responses
 - Seamless integration with existing chat functionality
+
+### Audio Input
+
+The library also supports recording and sending audio messages from the chat input.
+
+```javascript
+const assistant = createAssistant({
+  // ...other options...
+  audioInput: true, // Enable microphone button and audio uploads
+});
+```
+
+**How it works:**
+
+1. When `audioInput` is `true`, chat shows microphone button next to send button
+2. User holds microphone button to record audio
+3. Package records in browser, converts audio to WAV, and sends it as `voice_content`
+4. Optional text written in textarea is sent together with recorded audio
 
 ## Methods
 

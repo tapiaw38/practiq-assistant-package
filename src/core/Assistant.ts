@@ -674,8 +674,8 @@ export function createAssistant(options: AssistantOptions): Assistant {
     const showImages =
       chat && chat.getShowImages ? chat.getShowImages() : false;
     const hasImageAttachment = formData.has("image_content");
-    const imageProcessorParam =
-      showImages || hasImageAttachment ? "activate" : "deactivate";
+    // Attachments need Vision analysis, not image search by default.
+    const imageProcessorParam = showImages ? "activate" : "deactivate";
 
     const url = `${options.apiBaseUrl}/conversation/${conversationId}/message?has_image_processor=${imageProcessorParam}&has_text_to_voice=${textToVoiceParam}`;
 
@@ -762,8 +762,8 @@ export function createAssistant(options: AssistantOptions): Assistant {
       chat && chat.getShowImages ? chat.getShowImages() : false;
     const pendingFormData = await buildMessageFormData(message, contextToSend);
     const hasImageAttachment = pendingFormData.has("image_content");
-    const imageProcessorParam =
-      showImages || hasImageAttachment ? "activate" : "deactivate";
+    // Attachments need Vision analysis, not image search by default.
+    const imageProcessorParam = showImages ? "activate" : "deactivate";
 
     // Get audio answers state and add query parameter
     const audioAnswers =

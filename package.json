@@ -1,6 +1,6 @@
 {
   "name": "practiq-assistant-package",
-  "version": "0.5.7",
+  "version": "0.5.8",
   "description": "Package for integrating the Practiq AI assistant chat into any web application.",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",

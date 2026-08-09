@@ -1218,6 +1218,12 @@ export class Chat {
     this.chatWindow.insertBefore(panel, this.messageList);
   }
 
+  /** Updates visible progress without exposing transport details to host apps. */
+  public setTypingStatus(message: string): void {
+    const typingElement = this.messageList.querySelector("#ia-typing-indicator");
+    if (typingElement && message.trim()) typingElement.textContent = message;
+  }
+
   public toggle(): void {
     this.isOpen = !this.isOpen;
     this.container.style.display = this.isOpen ? "block" : "none";

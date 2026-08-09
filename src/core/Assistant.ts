@@ -141,9 +141,34 @@ export function createAssistant(options: AssistantOptions): Assistant {
     const active = context?.active_exercise as { id?: string } | undefined;
     const lower = message.toLowerCase();
     const intent = lower.includes("ejemplo") ? "similar_example" : lower.includes("explica") ? "explanation" : "hint";
+    const payload = { exercise_id: active?.id || "", context_id: active?.id || "", question: message, intent };
+    const streamResponse = await fetch(`${options.copilotBaseUrl}/stream`, {
+      method: "POST", headers: { ...getAuthHeaders("application/json"), Accept: "text/event-stream" }, body: JSON.stringify(payload),
+    });
+    if (streamResponse.ok && streamResponse.body) {
+      const reader = streamResponse.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let result: any = null;
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+        const events = buffer.split("\n\n"); buffer = events.pop() || "";
+        for (const event of events) {
+          const name = event.match(/^event:\s*(.+)$/m)?.[1];
+          const raw = event.match(/^data:\s*(.+)$/m)?.[1];
+          if (!raw) continue;
+          const data = JSON.parse(raw);
+          if (name === "status") chat?.setTypingStatus(data.message || "Ana está pensando…");
+          if (name === "response") result = data.data;
+          if (name === "error") throw new Error(data.message || "Copilot stream failed");
+        }
+        if (done) break;
+      }
+      if (Array.isArray(result?.blocks)) return JSON.stringify({ copilot_blocks: result.blocks, suggested_actions: result.suggested_actions || [] });
+    }
     const response = await fetch(options.copilotBaseUrl, {
-      method: "POST", headers: getAuthHeaders("application/json"),
-      body: JSON.stringify({ exercise_id: active?.id || "", context_id: active?.id || "", question: message, intent }),
+      method: "POST", headers: getAuthHeaders("application/json"), body: JSON.stringify(payload),
     });
     if (!response.ok) throw new Error(`Copilot request failed: ${response.status}`);
     const data = await response.json();

@@ -307,6 +307,16 @@ export class FloatingButton {
     this.element.style.bottom = "auto";
   }
 
+  /** Desktop open state: keep robot away from floating chat panel. */
+  public anchorToDesktopChat(): void {
+    if (window.innerWidth <= 720) return;
+    this.element.classList.add("floating-button--chat-anchor");
+    this.element.style.left = "20px";
+    this.element.style.top = "20px";
+    this.element.style.right = "auto";
+    this.element.style.bottom = "auto";
+  }
+
   public restoreFromMobileChat(): void {
     this.element.classList.remove("floating-button--chat-anchor", "floating-button--speaking");
     this.element.style.left = "";

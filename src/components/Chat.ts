@@ -94,6 +94,7 @@ export class Chat {
   private audioChunks: Blob[] = [];
   private isRecording: boolean = false;
   private recordingTimer?: number;
+  private mobileExpanded = false;
   private preferences = { audio: false, autoplay: false, speed: 1 };
 
   private getSendIconMarkup(): string {
@@ -198,6 +199,24 @@ export class Chat {
     this.chatWindow = document.createElement("div");
     this.chatWindow.className = `ia-chat-window ${this.options.position}`;
 
+    // Mobile bottom-sheet affordance. Compact by default; user owns expansion.
+    const sheetHandle = document.createElement("button");
+    sheetHandle.type = "button";
+    sheetHandle.className = "ia-chat-sheet-handle";
+    sheetHandle.setAttribute("aria-label", "Expandir asistente");
+    sheetHandle.innerHTML = '<span aria-hidden="true"></span>';
+    let touchStartY = 0;
+    let handledSwipe = false;
+    sheetHandle.addEventListener("click", () => {
+      if (handledSwipe) { handledSwipe = false; return; }
+      this.toggleMobileExpanded();
+    });
+    sheetHandle.addEventListener("touchstart", (event) => { touchStartY = event.touches[0]?.clientY || 0; handledSwipe = false; }, { passive: true });
+    sheetHandle.addEventListener("touchend", (event) => {
+      const delta = (event.changedTouches[0]?.clientY || touchStartY) - touchStartY;
+      if (Math.abs(delta) > 28) { handledSwipe = true; this.setMobileExpanded(delta < 0); }
+    }, { passive: true });
+
     // Header
     const header = document.createElement("div");
     header.className = "ia-chat-header";
@@ -245,6 +264,14 @@ export class Chat {
     settings.style.cssText = "border:0;background:transparent;color:inherit;cursor:pointer;font-size:18px";
     settings.onclick = () => this.togglePreferences();
     headerActions.appendChild(settings);
+    const expandButton = document.createElement("button");
+    expandButton.type = "button";
+    expandButton.className = "ia-chat-expand";
+    expandButton.textContent = "⤢";
+    expandButton.title = "Expandir asistente";
+    expandButton.setAttribute("aria-label", "Expandir asistente");
+    expandButton.onclick = () => this.toggleMobileExpanded();
+    headerActions.appendChild(expandButton);
     headerActions.appendChild(closeButton);
     header.appendChild(headerActions);
 
@@ -344,6 +371,7 @@ export class Chat {
     }
 
     // Assemble components
+    this.chatWindow.appendChild(sheetHandle);
     this.chatWindow.appendChild(header);
     this.chatWindow.appendChild(this.messageList);
     if (this.options.quickActions.length) {
@@ -1224,6 +1252,24 @@ export class Chat {
     if (typingElement && message.trim()) typingElement.textContent = message;
   }
 
+  private toggleMobileExpanded(): void {
+    this.setMobileExpanded(!this.mobileExpanded);
+  }
+
+  private setMobileExpanded(expanded: boolean): void {
+    if (window.innerWidth > 720) return;
+    this.mobileExpanded = expanded;
+    this.chatWindow.classList.toggle("ia-chat-window--expanded", expanded);
+    const button = this.chatWindow.querySelector(".ia-chat-expand") as HTMLButtonElement | null;
+    const handle = this.chatWindow.querySelector(".ia-chat-sheet-handle") as HTMLButtonElement | null;
+    if (button) {
+      button.textContent = expanded ? "⌄" : "⤢";
+      button.title = expanded ? "Reducir asistente" : "Expandir asistente";
+      button.setAttribute("aria-label", button.title);
+    }
+    if (handle) handle.setAttribute("aria-label", expanded ? "Reducir asistente" : "Expandir asistente");
+  }
+
   public toggle(): void {
     this.isOpen = !this.isOpen;
     this.container.style.display = this.isOpen ? "block" : "none";
@@ -1399,6 +1445,8 @@ export class Chat {
         pointer-events: auto;
         transition: transform 0.24s ease, opacity 0.24s ease, box-shadow 0.24s ease;
       }
+
+      .ia-chat-sheet-handle, .ia-chat-expand { display: none; }
       
       .ia-chat-window.bottom-right {
         bottom: 90px;
@@ -1782,15 +1830,55 @@ export class Chat {
       }
       
       /* Responsive */
-      @media (max-width: 480px) {
+      @media (max-width: 720px) {
         .ia-chat-window {
-          width: calc(100% - 20px);
-          height: min(78vh, 680px);
+          width: calc(100% - 16px);
+          height: min(48dvh, 520px);
+          max-height: calc(100dvh - 112px);
           left: 10px !important;
-          right: 10px !important;
-          bottom: 10px !important;
+          right: 6px !important;
+          bottom: max(10px, env(safe-area-inset-bottom)) !important;
           top: auto !important;
-          border-radius: 22px;
+          border-radius: 26px;
+          box-shadow: 0 12px 38px rgba(11, 38, 52, 0.28);
+        }
+
+        .ia-chat-window.ia-chat-window--expanded {
+          height: calc(100dvh - 16px);
+          max-height: calc(100dvh - 16px);
+          bottom: 8px !important;
+        }
+
+        .ia-chat-sheet-handle {
+          display: grid;
+          place-items: center;
+          flex: 0 0 26px;
+          width: 100%;
+          border: 0;
+          padding: 8px 0 4px;
+          background: transparent;
+          cursor: ns-resize;
+          touch-action: none;
+        }
+
+        .ia-chat-sheet-handle span {
+          width: 42px;
+          height: 4px;
+          border-radius: 999px;
+          background: rgba(18, 60, 82, 0.28);
+        }
+
+        .ia-chat-expand {
+          display: inline-grid;
+          place-items: center;
+          width: 32px;
+          height: 32px;
+          border: 0;
+          border-radius: 10px;
+          background: rgba(255,255,255,.16);
+          color: inherit;
+          cursor: pointer;
+          font-size: 18px;
         }
 
         .ia-chat-header {

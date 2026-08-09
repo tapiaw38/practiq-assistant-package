@@ -946,7 +946,7 @@ export class Chat {
             const card = document.createElement("section");
             card.style.cssText = "margin:6px 0;padding:10px;border-radius:12px;background:#eef2ff;border:1px solid #c7d2fe";
             const title = document.createElement("strong");
-            title.textContent = ({ hint: "💡 Pista", explanation: "🧩 Explicación", similar_example: "✨ Ejemplo" } as Record<string,string>)[block.type] || "🤖 Ayudante";
+            title.textContent = ({ hint: "💡 Pista", explanation: "🧩 Explicación", similar_example: "✨ Ejemplo", review_answer: "✅ Revisión" } as Record<string,string>)[block.type] || "🤖 Ayudante";
             const content = document.createElement("p"); content.textContent = block.content || ""; content.style.margin = "6px 0 0";
             card.append(title, content); messageElement.appendChild(card);
           }

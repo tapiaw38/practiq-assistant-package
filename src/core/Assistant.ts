@@ -138,10 +138,9 @@ export function createAssistant(options: AssistantOptions): Assistant {
   async function sendCopilotMessage(message: string): Promise<string | null> {
     if (!options.copilotBaseUrl || !options.getStructuredContext) return null;
     const context = await options.getStructuredContext();
-    const active = context?.active_exercise as { id?: string } | undefined;
-    const lower = message.toLowerCase();
-    const intent = lower.includes("ejemplo") ? "similar_example" : lower.includes("explica") ? "explanation" : "hint";
-    const payload = { exercise_id: active?.id || "", context_id: active?.id || "", question: message, intent };
+    const active = context?.active_exercise as { id?: string; student_answer?: string } | undefined;
+    const intent = inferCopilotIntent(message);
+    const payload = { exercise_id: active?.id || "", context_id: active?.id || "", question: message, intent, student_answer: active?.student_answer || "" };
     const streamResponse = await fetch(`${options.copilotBaseUrl}/stream`, {
       method: "POST", headers: { ...getAuthHeaders("application/json"), Accept: "text/event-stream" }, body: JSON.stringify(payload),
     });
@@ -175,6 +174,25 @@ export function createAssistant(options: AssistantOptions): Assistant {
     const blocks = data?.data?.blocks;
     if (!Array.isArray(blocks)) return null;
     return JSON.stringify({ copilot_blocks: blocks, suggested_actions: data?.data?.suggested_actions || [] });
+  }
+
+  function inferCopilotIntent(message: string): "hint" | "explanation" | "similar_example" | "review_answer" {
+    const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    if (/(revis|correg|verific|cheque)/.test(normalized)) return "review_answer";
+    if (normalized.includes("ejemplo")) return "similar_example";
+    if (/(explica|como se hace|paso a paso)/.test(normalized)) return "explanation";
+    return "hint";
+  }
+
+  function visionInstruction(message: string): string {
+    const intent = inferCopilotIntent(message);
+    if (intent === "review_answer") {
+      return `${message}\n\nInstrucción Practiq: lee consigna y respuesta adjuntas. Empieza con “Correcta.” o “Incorrecta.”; luego una comprobación concreta. Máximo 2 líneas. Sin saludo, ánimo ni preguntas.`;
+    }
+    if (intent === "hint") {
+      return `${message}\n\nInstrucción Practiq: da solo siguiente operación o idea. Máximo 20 palabras. Sin saludo ni pregunta final.`;
+    }
+    return `${message}\n\nInstrucción Practiq: respuesta directa, breve, sin saludo ni pregunta final.`;
   }
 
   // Floating button options
@@ -844,6 +862,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
               textarea.value = "";
               return { content: response, isHtml: response.includes("audio_url") };
             }
+            if (textContent && hasImageAttachment) message.set("content", visionInstruction(textContent));
             const response = await sendFormDataToApi(message);
             textarea.value = "";
 

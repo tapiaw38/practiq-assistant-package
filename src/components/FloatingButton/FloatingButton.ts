@@ -242,6 +242,9 @@ export class FloatingButton {
   }
 
   private restorePosition(): void {
+    // Stored coordinates predate viewport-aware persistence. Never apply a
+    // desktop coordinate on mobile, where it can place bubble off-screen.
+    if (window.innerWidth <= 720) return;
     try { const saved = JSON.parse(localStorage.getItem(this.options.storageKey) || "null"); if (saved?.left && saved?.top) this.element.style.cssText += `;left:${saved.left};top:${saved.top};right:auto;bottom:auto`; } catch { /* optional storage */ }
   }
 
@@ -291,6 +294,13 @@ export class FloatingButton {
     this.element.style.top = "";
     this.element.style.right = "";
     this.element.style.bottom = "";
+    // Desktop drag coordinates can be outside a narrow mobile viewport.
+    // Mobile always returns to a reachable default bubble position.
+    if (window.innerWidth <= 720) {
+      this.element.style.right = "16px";
+      this.element.style.bottom = "max(16px, env(safe-area-inset-bottom))";
+      return;
+    }
     this.restorePosition();
   }
 

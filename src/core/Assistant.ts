@@ -340,7 +340,11 @@ export function createAssistant(options: AssistantOptions): Assistant {
   };
   const syncChatBubble = () => {
     if (!chat?.getIsOpen()) { button.restoreFromMobileChat(); return; }
-    if (window.innerWidth > 720) { button.anchorToDesktopChat(); return; }
+    if (window.innerWidth > 720) {
+      const position = chat.getDesktopChatTopLeft();
+      if (position) button.anchorToDesktopChat(position.top, position.left);
+      return;
+    }
     requestAnimationFrame(() => {
       const sheetTop = chat?.getMobileSheetTop();
       if (typeof sheetTop === "number") button.anchorToMobileChat(sheetTop);

@@ -1410,6 +1410,12 @@ export class Chat {
     return this.chatWindow.getBoundingClientRect().top;
   }
 
+  public getDesktopChatTopLeft(): { top: number; left: number } | null {
+    if (!this.isOpen || window.innerWidth <= 720) return null;
+    const rect = this.chatWindow.getBoundingClientRect();
+    return { top: rect.top, left: rect.left };
+  }
+
   public getIsOpen(): boolean {
     return this.isOpen;
   }

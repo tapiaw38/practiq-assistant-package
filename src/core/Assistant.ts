@@ -806,6 +806,15 @@ export function createAssistant(options: AssistantOptions): Assistant {
 
           // Handle FormData (audio messages)
           if (message instanceof FormData) {
+            const textContent = String(message.get("content") || "").trim();
+            const voiceContent = message.get("voice_content");
+            // Chat emits text as FormData too. Route text through Practiq Copilot;
+            // keep audio on existing Gillie-compatible transport.
+            if (textContent && !(voiceContent instanceof Blob && voiceContent.size > 0)) {
+              const response = await sendMessageToApi(textContent);
+              textarea.value = "";
+              return { content: response, isHtml: response.includes("audio_url") };
+            }
             const response = await sendFormDataToApi(message);
             textarea.value = "";
 

@@ -953,9 +953,12 @@ export class Chat {
           if (Array.isArray(payload.suggested_actions)) {
             const actions = document.createElement("div"); actions.style.cssText = "display:flex;gap:6px;flex-wrap:wrap;margin-top:8px";
             for (const action of payload.suggested_actions) {
-              const button = document.createElement("button"); button.type = "button"; button.textContent = action === "hint" ? "Otra pista" : action === "explanation" ? "Explicame" : "Ejemplo";
+              const legacyPrompt = action === "hint" ? "Dame otra pista sin revelar la respuesta." : action === "explanation" ? "Explicame paso a paso usando el ejercicio actual." : "Dame un ejemplo similar con números diferentes.";
+              const prompt = typeof action === "string" ? legacyPrompt : action?.type === "prompt" && typeof action.prompt === "string" ? action.prompt : "";
+              if (!prompt) continue;
+              const button = document.createElement("button"); button.type = "button"; button.textContent = typeof action === "string" ? (action === "hint" ? "Otra pista" : action === "explanation" ? "Explicame" : "Ejemplo") : (action.label || "Continuar");
               button.style.cssText = "border:0;border-radius:999px;padding:5px 8px;cursor:pointer;background:#c7d2fe";
-              button.onclick = () => this.sendPrompt(button.textContent || "Dame una pista"); actions.appendChild(button);
+              button.onclick = () => this.sendPrompt(prompt); actions.appendChild(button);
             }
             messageElement.appendChild(actions);
           }

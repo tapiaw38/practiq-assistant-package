@@ -833,9 +833,13 @@ export function createAssistant(options: AssistantOptions): Assistant {
           if (message instanceof FormData) {
             const textContent = String(message.get("content") || "").trim();
             const voiceContent = message.get("voice_content");
+            // Resolve host image before choosing transport. Previously this ran
+            // inside sendFormDataToApi, after Copilot had already discarded it.
+            await appendImageAttachmentIfNeeded(message);
+            const hasImageAttachment = message.has("image_content");
             // Chat emits text as FormData too. Route text through Practiq Copilot;
-            // keep audio on existing Gillie-compatible transport.
-            if (textContent && !(voiceContent instanceof Blob && voiceContent.size > 0)) {
+            // keep audio and Vision attachments on existing Gillie transport.
+            if (textContent && !hasImageAttachment && !(voiceContent instanceof Blob && voiceContent.size > 0)) {
               const response = await sendMessageToApi(textContent);
               textarea.value = "";
               return { content: response, isHtml: response.includes("audio_url") };

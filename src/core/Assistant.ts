@@ -201,6 +201,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
       { label: "Explicame", prompt: "Explicame paso a paso." },
       { label: "Revisá mi respuesta", prompt: "Revisá mi respuesta y decime cómo mejorarla." },
     ],
+    preferencesStorageKey: `practiq-assistant:preferences:${options.conversationStorageKey || "default"}`,
   };
 
   // Create components

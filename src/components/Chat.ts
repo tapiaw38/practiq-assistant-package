@@ -70,6 +70,7 @@ export interface ChatOptions {
   /** Enable recording and sending audio messages */
   audioInput?: boolean;
   quickActions?: Array<{ label: string; prompt: string }>;
+  preferencesStorageKey?: string;
 }
 
 /**
@@ -93,6 +94,7 @@ export class Chat {
   private audioChunks: Blob[] = [];
   private isRecording: boolean = false;
   private recordingTimer?: number;
+  private preferences = { audio: false, autoplay: false, speed: 1 };
 
   private getSendIconMarkup(): string {
     return `
@@ -163,7 +165,13 @@ export class Chat {
         ? { audioInput: !!options.audioInput }
         : {}),
       quickActions: options.quickActions || [],
+      preferencesStorageKey: options.preferencesStorageKey || "practiq-assistant:preferences",
     };
+    try {
+      const saved = JSON.parse(localStorage.getItem(this.options.preferencesStorageKey) || "null");
+      this.preferences = { audio: saved?.audio ?? !!this.options.audioAnswers, autoplay: !!saved?.autoplay, speed: Number(saved?.speed) || 1 };
+      this.options.audioAnswers = this.preferences.audio;
+    } catch { this.preferences.audio = !!this.options.audioAnswers; }
 
     this.createChatElements();
     this.addEventListeners();
@@ -232,6 +240,11 @@ export class Chat {
 
     header.appendChild(title);
     headerActions.appendChild(newConvButton);
+    const settings = document.createElement("button");
+    settings.type = "button"; settings.textContent = "⚙"; settings.title = "Preferencias";
+    settings.style.cssText = "border:0;background:transparent;color:inherit;cursor:pointer;font-size:18px";
+    settings.onclick = () => this.togglePreferences();
+    headerActions.appendChild(settings);
     headerActions.appendChild(closeButton);
     header.appendChild(headerActions);
 
@@ -972,11 +985,16 @@ export class Chat {
         const audioPlayer = document.createElement("audio");
         audioPlayer.className = "ia-audio-player";
         audioPlayer.src = audioUrl;
+        audioPlayer.playbackRate = this.preferences.speed;
         audioPlayer.controls = true;
         audioPlayer.style.display = "none";
 
         audioContainer.appendChild(playButton);
         audioContainer.appendChild(audioPlayer);
+        if (this.preferences.autoplay) {
+          audioPlayer.style.display = "block";
+          audioPlayer.play().catch(() => undefined);
+        }
         messageElement.appendChild(audioContainer);
       }
     }
@@ -1154,6 +1172,22 @@ export class Chat {
   /**
    * Toggles between showing and hiding the chat
    */
+  private togglePreferences(): void {
+    const existing = this.chatWindow.querySelector(".ia-chat-preferences");
+    if (existing) { existing.remove(); return; }
+    const panel = document.createElement("div");
+    panel.className = "ia-chat-preferences";
+    panel.style.cssText = "padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;display:grid;gap:8px";
+    panel.innerHTML = `<label><input type="checkbox" data-audio> Respuestas con audio</label><label><input type="checkbox" data-autoplay> Reproducir automáticamente</label><label>Velocidad <select data-speed><option value="0.75">0.75x</option><option value="1">1x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option></select></label>`;
+    const audio = panel.querySelector("[data-audio]") as HTMLInputElement;
+    const autoplay = panel.querySelector("[data-autoplay]") as HTMLInputElement;
+    const speed = panel.querySelector("[data-speed]") as HTMLSelectElement;
+    audio.checked = this.preferences.audio; autoplay.checked = this.preferences.autoplay; speed.value = String(this.preferences.speed);
+    const save = () => { this.preferences = { audio: audio.checked, autoplay: autoplay.checked, speed: Number(speed.value) }; this.options.audioAnswers = this.preferences.audio; try { localStorage.setItem(this.options.preferencesStorageKey, JSON.stringify(this.preferences)); } catch { /* optional */ } };
+    audio.onchange = save; autoplay.onchange = save; speed.onchange = save;
+    this.chatWindow.insertBefore(panel, this.messageList);
+  }
+
   public toggle(): void {
     this.isOpen = !this.isOpen;
     this.container.style.display = this.isOpen ? "block" : "none";

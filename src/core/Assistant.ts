@@ -307,6 +307,15 @@ export function createAssistant(options: AssistantOptions): Assistant {
 
   // Mount components
   button.mount(buttonOptions.container || document.body);
+  const syncMobileBubble = () => {
+    if (!chat?.getIsOpen() || window.innerWidth > 720) { button.restoreFromMobileChat(); return; }
+    requestAnimationFrame(() => {
+      const sheetTop = chat?.getMobileSheetTop();
+      if (typeof sheetTop === "number") button.anchorToMobileChat(sheetTop);
+    });
+  };
+  const onChatToggle = () => syncMobileBubble();
+  const onAudioState = (event: Event) => button.setSpeaking(!!(event as CustomEvent<{ playing?: boolean }>).detail?.playing);
   const trackEyes = (event: PointerEvent) => {
     const rect = (button as any).element?.getBoundingClientRect?.();
     if (!rect) return;
@@ -316,6 +325,9 @@ export function createAssistant(options: AssistantOptions): Assistant {
   };
   window.addEventListener("pointermove", trackEyes);
   window.addEventListener("practiq:assistant:route-change", handleRouteChange);
+  window.addEventListener("practiq:assistant:chat-toggle", onChatToggle);
+  window.addEventListener("practiq:assistant:audio-state", onAudioState);
+  window.addEventListener("resize", syncMobileBubble);
 
   // Function to process HTML content
   function processHtmlContent(content: string): string {
@@ -944,6 +956,9 @@ export function createAssistant(options: AssistantOptions): Assistant {
         handleRouteChange
       );
       window.removeEventListener("pointermove", trackEyes);
+      window.removeEventListener("practiq:assistant:chat-toggle", onChatToggle);
+      window.removeEventListener("practiq:assistant:audio-state", onAudioState);
+      window.removeEventListener("resize", syncMobileBubble);
     },
     isOpen: () => !!(chat && chat["isOpen"]),
     hideButton: () => button.hide(),

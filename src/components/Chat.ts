@@ -223,13 +223,7 @@ export class Chat {
 
     const title = document.createElement("div");
     title.className = "ia-chat-title";
-    const titleRobot = document.createElement("span");
-    titleRobot.className = "ia-chat-title-robot";
-    titleRobot.setAttribute("aria-hidden", "true");
-    titleRobot.innerHTML = '<span class="ia-chat-title-antenna"></span><span class="ia-chat-title-face"><i></i><i></i></span>';
-    const titleText = document.createElement("span");
-    titleText.textContent = this.options.title;
-    title.append(titleRobot, titleText);
+    title.textContent = this.options.title;
 
     const headerActions = document.createElement("div");
     headerActions.className = "ia-chat-header-actions";
@@ -1057,7 +1051,7 @@ export class Chat {
           playButton.textContent = playing ? "❚❚" : "▶";
           playButton.setAttribute("aria-label", playing ? "Pausar audio" : "Reproducir audio");
           audioContainer.classList.toggle("ia-audio-container--playing", playing);
-          messageElement.classList.toggle("ia-message-speaking", playing);
+          window.dispatchEvent(new CustomEvent("practiq:assistant:audio-state", { detail: { playing } }));
         };
         playButton.onclick = () => { if (audioPlayer.paused) audioPlayer.play().catch(() => undefined); else audioPlayer.pause(); };
         progress.oninput = () => { if (audioPlayer.duration) audioPlayer.currentTime = (Number(progress.value) / 100) * audioPlayer.duration; };
@@ -1292,6 +1286,7 @@ export class Chat {
   public toggle(): void {
     this.isOpen = !this.isOpen;
     this.container.style.display = this.isOpen ? "block" : "none";
+    window.dispatchEvent(new CustomEvent("practiq:assistant:chat-toggle", { detail: { open: this.isOpen } }));
 
     if (this.isOpen) {
       // Focus the textarea when opened
@@ -1403,6 +1398,15 @@ export class Chat {
     }
   }
 
+  public getMobileSheetTop(): number | null {
+    if (!this.isOpen || window.innerWidth > 720) return null;
+    return this.chatWindow.getBoundingClientRect().top;
+  }
+
+  public getIsOpen(): boolean {
+    return this.isOpen;
+  }
+
   /** Open chat and send a contextual quick action. */
   public async sendPrompt(prompt: string): Promise<void> {
     this.open();
@@ -1510,17 +1514,9 @@ export class Chat {
         color: white;
         font-size: 15px;
         letter-spacing: 0.01em;
-        display: flex;
-        align-items: center;
-        gap: 8px;
+        display: block;
         margin: 0;
       }
-
-      .ia-chat-title-robot { position:relative; width:24px; height:22px; display:grid; place-items:center; flex:0 0 24px; }
-      .ia-chat-title-face { width:21px; height:17px; border:1.5px solid #312e81; border-radius:7px; background:#c7d2fe; box-shadow:inset 0 1px 2px #fff9; display:flex; align-items:center; justify-content:center; gap:4px; }
-      .ia-chat-title-face i { width:4px; height:5px; border-radius:50%; background:#22d3ee; box-shadow:0 0 4px #67e8f9; }
-      .ia-chat-title-antenna { position:absolute; top:0; width:2px; height:5px; background:#312e81; }
-      .ia-chat-title-antenna::after { content:""; position:absolute; top:-2px; left:-2px; width:5px; height:5px; border-radius:50%; background:#fbbf24; }
 
       .ia-chat-new-conv,
       .ia-chat-close {
@@ -2043,9 +2039,6 @@ export class Chat {
       .ia-audio-toggle { width:32px; height:32px; border:0; border-radius:50%; background:${primaryColor}; color:white; cursor:pointer; font-size:13px; display:grid; place-items:center; padding-left:2px; }
       .ia-audio-time { white-space:nowrap; font-size:12px; font-weight:700; color:#475569; font-variant-numeric:tabular-nums; }
       .ia-audio-progress { min-width:0; width:100%; accent-color:${primaryColor}; cursor:pointer; }
-      .ia-message-speaking { animation: ia-audio-glow 1.5s ease-in-out infinite; }
-      @keyframes ia-audio-glow { 0%,100% { box-shadow:0 0 0 0 rgba(202,166,43,.18); } 50% { box-shadow:0 0 0 7px rgba(202,166,43,.12), 0 8px 22px rgba(202,166,43,.20); } }
-      @media (prefers-reduced-motion: reduce) { .ia-message-speaking { animation:none; box-shadow:0 0 0 4px rgba(202,166,43,.14); } }
     `;
 
     document.head.appendChild(styleElement);

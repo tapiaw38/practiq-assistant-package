@@ -133,6 +133,10 @@ export class FloatingButton {
       }
       .floating-button--robot { background:transparent !important; border-radius:0; box-shadow:none; overflow:visible; }
       .floating-button--robot:hover, .floating-button--robot.hovered { box-shadow:none; }
+      .floating-button--chat-anchor { z-index:1002; }
+      .floating-button--speaking .floating-button-face { animation:floating-robot-speaking 1.45s ease-in-out infinite; }
+      @keyframes floating-robot-speaking { 0%,100% { transform:scale(1); box-shadow:inset 0 2px 3px #fff8, 0 0 0 0 rgba(202,166,43,.22); } 50% { transform:scale(1.07); box-shadow:inset 0 2px 3px #fff8, 0 0 0 8px rgba(202,166,43,.14), 0 8px 22px rgba(202,166,43,.28); } }
+      @media (prefers-reduced-motion: reduce) { .floating-button--speaking .floating-button-face { animation:none; box-shadow:inset 0 2px 3px #fff8, 0 0 0 5px rgba(202,166,43,.16); } }
 
       .floating-button-avatar {
         width: 72%;
@@ -268,5 +272,28 @@ export class FloatingButton {
 
   public show(): void {
     this.element.style.display = "flex";
+  }
+
+  /** Mobile open state: keep same robot visible as a sheet-side companion. */
+  public anchorToMobileChat(sheetTop: number): void {
+    if (window.innerWidth > 720) return;
+    this.element.classList.add("floating-button--chat-anchor");
+    this.element.style.left = "20px";
+    this.element.style.top = `${Math.max(8, sheetTop - 48)}px`;
+    this.element.style.right = "auto";
+    this.element.style.bottom = "auto";
+  }
+
+  public restoreFromMobileChat(): void {
+    this.element.classList.remove("floating-button--chat-anchor", "floating-button--speaking");
+    this.element.style.left = "";
+    this.element.style.top = "";
+    this.element.style.right = "";
+    this.element.style.bottom = "";
+    this.restorePosition();
+  }
+
+  public setSpeaking(speaking: boolean): void {
+    this.element.classList.toggle("floating-button--speaking", speaking);
   }
 }

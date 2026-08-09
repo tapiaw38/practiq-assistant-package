@@ -57,7 +57,7 @@ export class FloatingButton {
     } else {
       const face = document.createElement("span");
       face.className = "floating-button-face";
-      face.innerHTML = `<span class="floating-button-eye"><i></i></span><span class="floating-button-eye"><i></i></span>`;
+      face.innerHTML = `<span class="floating-button-antenna"></span><span class="floating-button-ear floating-button-ear--left"></span><span class="floating-button-ear floating-button-ear--right"></span><span class="floating-button-screen"><span class="floating-button-eye"><i></i></span><span class="floating-button-eye"><i></i></span><b></b></span>`;
       this.element.appendChild(face);
     }
     if (text) {
@@ -138,9 +138,15 @@ export class FloatingButton {
         object-fit: contain;
         display: block;
       }
-      .floating-button-face { display:flex; gap:7px; align-items:center; }
-      .floating-button-eye { width:13px; height:17px; border-radius:50%; background:#fff; display:grid; place-items:center; }
-      .floating-button-eye i { width:6px; height:6px; border-radius:50%; background:#312e81; }
+      .floating-button-face { position:relative; width:72%; height:66%; border:2px solid #312e81; border-radius:34% 34% 42% 42%; background:linear-gradient(145deg,#dbeafe,#a5b4fc); display:grid; place-items:center; box-shadow:inset 0 2px 3px #fff8; }
+      .floating-button-screen { width:78%; height:55%; border-radius:9px; background:#312e81; display:flex; gap:7px; align-items:center; justify-content:center; box-shadow:inset 0 0 0 2px #818cf8; }
+      .floating-button-eye { width:12px; height:15px; border-radius:50%; background:#f8fafc; display:grid; place-items:center; overflow:hidden; }
+      .floating-button-eye i { width:6px; height:6px; border-radius:50%; background:#22d3ee; box-shadow:0 0 5px #67e8f9; }
+      .floating-button-screen b { position:absolute; bottom:6px; width:11px; height:3px; border-radius:99px; background:#67e8f9; }
+      .floating-button-antenna { position:absolute; top:-11px; width:3px; height:10px; background:#312e81; }
+      .floating-button-antenna::after { content:""; position:absolute; top:-5px; left:-3px; width:9px; height:9px; border-radius:50%; background:#fbbf24; border:2px solid #312e81; }
+      .floating-button-ear { position:absolute; top:35%; width:7px; height:17px; border:2px solid #312e81; background:#818cf8; }
+      .floating-button-ear--left { left:-8px; border-radius:7px 0 0 7px; } .floating-button-ear--right { right:-8px; border-radius:0 7px 7px 0; }
       
       .floating-button.small {
         width: 40px;

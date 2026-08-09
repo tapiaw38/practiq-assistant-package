@@ -259,6 +259,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
   // Create components
   const button = new FloatingButton(buttonOptions);
   let chat: Chat | null = null;
+  let activeContextLabel = "";
   let conversationId: string | null = null;
   let pendingOpen = false;
   let lastContext: string = "";
@@ -352,6 +353,10 @@ export function createAssistant(options: AssistantOptions): Assistant {
   };
   const onChatToggle = () => syncChatBubble();
   const onAudioState = (event: Event) => button.setSpeaking(!!(event as CustomEvent<{ playing?: boolean }>).detail?.playing);
+  const onActiveContext = (event: Event) => {
+    activeContextLabel = String((event as CustomEvent<{ label?: string }>).detail?.label || "");
+    chat?.setContextLabel(activeContextLabel);
+  };
   const trackEyes = (event: PointerEvent) => {
     const rect = (button as any).element?.getBoundingClientRect?.();
     if (!rect) return;
@@ -364,6 +369,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
   window.addEventListener("practiq:assistant:chat-toggle", onChatToggle);
   window.addEventListener("practiq:assistant:chat-resize", syncChatBubble);
   window.addEventListener("practiq:assistant:audio-state", onAudioState);
+  window.addEventListener("practiq:assistant:active-context", onActiveContext);
   window.addEventListener("resize", syncChatBubble);
 
   // Function to process HTML content
@@ -960,6 +966,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
       chat.setOnNewConversation(async () => {
         resetConversationState();
       });
+      chat.setContextLabel(activeContextLabel);
       // If the user tried to open the chat before it was ready, open it now
       if (pendingOpen) {
         chat.open();
@@ -998,6 +1005,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
       window.removeEventListener("practiq:assistant:chat-toggle", onChatToggle);
       window.removeEventListener("practiq:assistant:chat-resize", syncChatBubble);
       window.removeEventListener("practiq:assistant:audio-state", onAudioState);
+      window.removeEventListener("practiq:assistant:active-context", onActiveContext);
       window.removeEventListener("resize", syncChatBubble);
     },
     isOpen: () => !!(chat && chat["isOpen"]),

@@ -82,6 +82,7 @@ export class Chat {
   private chatWindow!: HTMLDivElement;
   private messageList!: HTMLDivElement;
   private inputArea!: HTMLDivElement;
+  private contextLabel?: HTMLSpanElement;
   private isOpen: boolean = false;
   private options: Required<Omit<ChatOptions, "audioAnswers" | "audioInput">> & {
     showImagesOption?: boolean;
@@ -224,6 +225,10 @@ export class Chat {
     const title = document.createElement("div");
     title.className = "ia-chat-title";
     title.textContent = this.options.title;
+    const contextLabel = document.createElement("span");
+    contextLabel.className = "ia-chat-context-label";
+    contextLabel.style.cssText = "display:none;margin-left:8px;padding:3px 7px;border-radius:999px;background:rgba(255,255,255,.2);font-size:11px;font-weight:600";
+    this.contextLabel = contextLabel;
 
     const headerActions = document.createElement("div");
     headerActions.className = "ia-chat-header-actions";
@@ -257,7 +262,7 @@ export class Chat {
     closeButton.setAttribute("aria-label", "Close chat");
     closeButton.setAttribute("type", "button");
 
-    header.appendChild(title);
+    header.append(title, contextLabel);
     headerActions.appendChild(newConvButton);
     const settings = document.createElement("button");
     settings.type = "button"; settings.textContent = "⚙"; settings.title = "Preferencias";
@@ -1408,6 +1413,12 @@ export class Chat {
   public getMobileSheetTop(): number | null {
     if (!this.isOpen || window.innerWidth > 720) return null;
     return this.chatWindow.getBoundingClientRect().top;
+  }
+
+  public setContextLabel(label?: string): void {
+    if (!this.contextLabel) return;
+    this.contextLabel.textContent = label || "";
+    this.contextLabel.style.display = label ? "inline-flex" : "none";
   }
 
   public getDesktopChatTopLeft(): { top: number; left: number } | null {

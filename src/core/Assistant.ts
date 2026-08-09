@@ -77,6 +77,12 @@ export interface AssistantOptions {
     | Promise<Record<string, unknown> | null>
     | Record<string, unknown>
     | null;
+  /** Host-agnostic visibility policy. Use stable logical view names, not URLs. */
+  visibility?: {
+    includeViews?: string[];
+    excludeViews?: string[];
+    getCurrentView: () => string | undefined | null;
+  };
 }
 
 /**
@@ -101,6 +107,8 @@ export interface Assistant {
   refreshContext: () => void;
   /** Reset current conversation state and clear rendered messages */
   resetConversation: () => void;
+  /** Re-evaluate configured view visibility after host navigation. */
+  refreshVisibility: () => void;
   /** Open chat and send a quick action with current context. */
   prompt: (message: string) => Promise<void>;
 }
@@ -121,6 +129,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
     );
   }
   const credential = authCredential;
+  let isVisibleForCurrentView = true;
 
   function getAuthHeaders(contentType?: string): Record<string, string> {
     const headers: Record<string, string> = {};
@@ -307,6 +316,28 @@ export function createAssistant(options: AssistantOptions): Assistant {
 
   // Mount components
   button.mount(buttonOptions.container || document.body);
+  const refreshVisibility = () => {
+    const policy = options.visibility;
+    if (!policy) {
+      isVisibleForCurrentView = true;
+      button.show();
+      return;
+    }
+    const currentView = String(policy.getCurrentView?.() || "");
+    const included = policy.includeViews || [];
+    const excluded = policy.excludeViews || [];
+    const isExcluded = excluded.includes(currentView);
+    const isIncluded = included.length === 0 || included.includes(currentView);
+    isVisibleForCurrentView = Boolean(currentView) && isIncluded && !isExcluded;
+    if (isVisibleForCurrentView) {
+      button.show();
+      return;
+    }
+    chat?.close();
+    chat?.stopAudio();
+    button.restoreFromMobileChat();
+    button.hide();
+  };
   const syncMobileBubble = () => {
     if (!chat?.getIsOpen() || window.innerWidth > 720) { button.restoreFromMobileChat(); return; }
     requestAnimationFrame(() => {
@@ -932,9 +963,11 @@ export function createAssistant(options: AssistantOptions): Assistant {
 
   // Start the conversation and mount the chat
   initConversationAndMountChat();
+  refreshVisibility();
 
   // Configure interaction
   button.setOnClick(() => {
+    if (!isVisibleForCurrentView) return;
     if (chat) {
       chat.toggle();
     } else {
@@ -945,9 +978,9 @@ export function createAssistant(options: AssistantOptions): Assistant {
 
   // Return public API
   return {
-    open: () => chat && chat.open(),
+    open: () => isVisibleForCurrentView && chat && chat.open(),
     close: () => chat && chat.close(),
-    toggle: () => chat && chat.toggle(),
+    toggle: () => isVisibleForCurrentView && chat && chat.toggle(),
     unmount: () => {
       chat && chat.unmount();
       button.unmount();
@@ -965,7 +998,9 @@ export function createAssistant(options: AssistantOptions): Assistant {
     showButton: () => button.show(),
     refreshContext: () => resetContextCache(),
     resetConversation: () => resetConversationState(),
+    refreshVisibility,
     prompt: async (message: string) => {
+      if (!isVisibleForCurrentView) return;
       if (chat) await chat.sendPrompt(message);
       else pendingOpen = true;
     },

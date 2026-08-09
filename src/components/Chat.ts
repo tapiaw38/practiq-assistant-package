@@ -1398,6 +1398,12 @@ export class Chat {
     }
   }
 
+  public stopAudio(): void {
+    this.messageList.querySelectorAll("audio").forEach((audio) => {
+      (audio as HTMLAudioElement).pause();
+    });
+  }
+
   public getMobileSheetTop(): number | null {
     if (!this.isOpen || window.innerWidth > 720) return null;
     return this.chatWindow.getBoundingClientRect().top;

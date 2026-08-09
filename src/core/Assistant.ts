@@ -12,6 +12,8 @@ import {
 export interface AssistantOptions {
   /** Required API Base URL for authentication */
   apiBaseUrl: string;
+  /** Practiq endpoint that wraps Gillie into structured Copilot blocks. */
+  copilotBaseUrl?: string;
   /** Session token for proxy-based authentication */
   authToken?: string;
   /** Direct API key for upstream authentication */
@@ -131,6 +133,23 @@ export function createAssistant(options: AssistantOptions): Assistant {
       headers["x-api-key"] = credential;
     }
     return headers;
+  }
+
+  async function sendCopilotMessage(message: string): Promise<string | null> {
+    if (!options.copilotBaseUrl || !options.getStructuredContext) return null;
+    const context = await options.getStructuredContext();
+    const active = context?.active_exercise as { id?: string } | undefined;
+    const lower = message.toLowerCase();
+    const intent = lower.includes("ejemplo") ? "similar_example" : lower.includes("explica") ? "explanation" : "hint";
+    const response = await fetch(options.copilotBaseUrl, {
+      method: "POST", headers: getAuthHeaders("application/json"),
+      body: JSON.stringify({ exercise_id: active?.id || "", context_id: active?.id || "", question: message, intent }),
+    });
+    if (!response.ok) throw new Error(`Copilot request failed: ${response.status}`);
+    const data = await response.json();
+    const blocks = data?.data?.blocks;
+    if (!Array.isArray(blocks)) return null;
+    return blocks.map((block: { content?: string }) => block.content || "").filter(Boolean).join("\n\n") || null;
   }
 
   // Floating button options
@@ -685,6 +704,8 @@ export function createAssistant(options: AssistantOptions): Assistant {
     message: string,
     context: string = ""
   ): Promise<string> {
+    const copilotResponse = await sendCopilotMessage(message);
+    if (copilotResponse) return processHtmlContent(copilotResponse);
     // Create conversation if it doesn't exist yet
     if (!conversationId) {
       const title = message.substring(0, 20) || chatOptions.title || "Nueva conversación";

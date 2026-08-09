@@ -41,7 +41,7 @@ export class FloatingButton {
       this.options;
 
     // Set classes and styles
-    this.element.className = `floating-button ${size} ${position}`;
+    this.element.className = `floating-button ${size} ${position}${avatarUrl ? "" : " floating-button--robot"}`;
     this.element.style.backgroundColor = backgroundColor;
     this.element.style.color = color;
     this.element.setAttribute("aria-label", "Open chat");
@@ -131,6 +131,8 @@ export class FloatingButton {
         transform: scale(1.1);
         box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
       }
+      .floating-button--robot { background:transparent !important; border-radius:0; box-shadow:none; overflow:visible; }
+      .floating-button--robot:hover, .floating-button--robot.hovered { box-shadow:none; }
 
       .floating-button-avatar {
         width: 72%;

@@ -1204,8 +1204,8 @@ export class Chat {
     if (existing) { existing.remove(); return; }
     const panel = document.createElement("div");
     panel.className = "ia-chat-preferences";
-    panel.style.cssText = "padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;display:grid;gap:8px";
-    panel.innerHTML = `<label><input type="checkbox" data-audio> Respuestas con audio</label><label><input type="checkbox" data-autoplay> Reproducir automáticamente</label><label>Velocidad <select data-speed><option value="0.75">0.75x</option><option value="1">1x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option></select></label>`;
+    panel.style.cssText = "margin:8px 10px;padding:12px;border:1px solid #c7d2fe;border-radius:14px;background:linear-gradient(135deg,#eef2ff,#f8fafc);font-size:12px;display:grid;gap:10px;box-shadow:0 6px 18px #312e8112";
+    panel.innerHTML = `<strong style="font-size:13px;color:#312e81">🔊 Preferencias de audio</strong><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Responder con voz</span><input type="checkbox" data-audio></label><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Reproducir al recibir</span><input type="checkbox" data-autoplay></label><label style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Velocidad</span><select data-speed style="border:1px solid #c7d2fe;border-radius:8px;padding:4px"><option value="0.75">0.75x</option><option value="1">1x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option></select></label><small style="color:#64748b">Podés pausar o avanzar desde controles de audio.</small>`;
     const audio = panel.querySelector("[data-audio]") as HTMLInputElement;
     const autoplay = panel.querySelector("[data-autoplay]") as HTMLInputElement;
     const speed = panel.querySelector("[data-speed]") as HTMLSelectElement;

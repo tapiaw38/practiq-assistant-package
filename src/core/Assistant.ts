@@ -357,6 +357,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
   window.addEventListener("pointermove", trackEyes);
   window.addEventListener("practiq:assistant:route-change", handleRouteChange);
   window.addEventListener("practiq:assistant:chat-toggle", onChatToggle);
+  window.addEventListener("practiq:assistant:chat-resize", syncMobileBubble);
   window.addEventListener("practiq:assistant:audio-state", onAudioState);
   window.addEventListener("resize", syncMobileBubble);
 
@@ -990,6 +991,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
       );
       window.removeEventListener("pointermove", trackEyes);
       window.removeEventListener("practiq:assistant:chat-toggle", onChatToggle);
+      window.removeEventListener("practiq:assistant:chat-resize", syncMobileBubble);
       window.removeEventListener("practiq:assistant:audio-state", onAudioState);
       window.removeEventListener("resize", syncMobileBubble);
     },

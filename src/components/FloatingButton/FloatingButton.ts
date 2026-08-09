@@ -222,13 +222,22 @@ export class FloatingButton {
   private enableDrag(): void {
     if (!this.options.draggable) return;
     let startX = 0, startY = 0, left = 0, top = 0;
+    let dragReady = false;
+    let touchHoldTimer: ReturnType<typeof setTimeout> | undefined;
     this.element.addEventListener("pointerdown", (event) => {
       startX = event.clientX; startY = event.clientY;
       const rect = this.element.getBoundingClientRect(); left = rect.left; top = rect.top;
       this.element.setPointerCapture(event.pointerId);
+      dragReady = event.pointerType !== "touch";
+      // Touch is click-first. Drag starts only after a short hold, avoiding
+      // normal tap jitter consuming the first chat-open click.
+      if (event.pointerType === "touch") {
+        touchHoldTimer = setTimeout(() => { dragReady = true; }, 260);
+      }
     });
     this.element.addEventListener("pointermove", (event) => {
       if (!this.element.hasPointerCapture(event.pointerId)) return;
+      if (!dragReady) return;
       const x = Math.max(8, Math.min(window.innerWidth - this.element.offsetWidth - 8, left + event.clientX - startX));
       const y = Math.max(8, Math.min(window.innerHeight - this.element.offsetHeight - 8, top + event.clientY - startY));
       this.dragged ||= Math.abs(event.clientX - startX) + Math.abs(event.clientY - startY) > 5;
@@ -236,8 +245,15 @@ export class FloatingButton {
     });
     this.element.addEventListener("pointerup", (event) => {
       if (!this.element.hasPointerCapture(event.pointerId)) return;
+      if (touchHoldTimer) clearTimeout(touchHoldTimer);
+      touchHoldTimer = undefined;
       this.element.releasePointerCapture(event.pointerId);
       if (this.dragged) localStorage.setItem(this.options.storageKey, JSON.stringify({left:this.element.style.left, top:this.element.style.top}));
+    });
+    this.element.addEventListener("pointercancel", () => {
+      if (touchHoldTimer) clearTimeout(touchHoldTimer);
+      touchHoldTimer = undefined;
+      dragReady = false;
     });
   }
 

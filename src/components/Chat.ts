@@ -1281,6 +1281,7 @@ export class Chat {
       button.setAttribute("aria-label", button.title);
     }
     if (handle) handle.setAttribute("aria-label", expanded ? "Reducir asistente" : "Expandir asistente");
+    window.dispatchEvent(new CustomEvent("practiq:assistant:chat-resize"));
   }
 
   public toggle(): void {

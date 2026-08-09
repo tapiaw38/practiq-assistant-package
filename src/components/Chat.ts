@@ -937,6 +937,33 @@ export class Chat {
     const messageElement = document.createElement("div");
     messageElement.className = `ia-chat-message ${sender}`;
 
+    if (sender === "assistant") {
+      try {
+        const payload = JSON.parse(text);
+        if (Array.isArray(payload.copilot_blocks)) {
+          messageElement.classList.add("ia-copilot-cards");
+          for (const block of payload.copilot_blocks) {
+            const card = document.createElement("section");
+            card.style.cssText = "margin:6px 0;padding:10px;border-radius:12px;background:#eef2ff;border:1px solid #c7d2fe";
+            const title = document.createElement("strong");
+            title.textContent = ({ hint: "💡 Pista", explanation: "🧩 Explicación", similar_example: "✨ Ejemplo" } as Record<string,string>)[block.type] || "🤖 Ayudante";
+            const content = document.createElement("p"); content.textContent = block.content || ""; content.style.margin = "6px 0 0";
+            card.append(title, content); messageElement.appendChild(card);
+          }
+          if (Array.isArray(payload.suggested_actions)) {
+            const actions = document.createElement("div"); actions.style.cssText = "display:flex;gap:6px;flex-wrap:wrap;margin-top:8px";
+            for (const action of payload.suggested_actions) {
+              const button = document.createElement("button"); button.type = "button"; button.textContent = action === "hint" ? "Otra pista" : action === "explanation" ? "Explicame" : "Ejemplo";
+              button.style.cssText = "border:0;border-radius:999px;padding:5px 8px;cursor:pointer;background:#c7d2fe";
+              button.onclick = () => this.sendPrompt(button.textContent || "Dame una pista"); actions.appendChild(button);
+            }
+            messageElement.appendChild(actions);
+          }
+          this.messageList.appendChild(messageElement); this.scrollToBottom(); return;
+        }
+      } catch { /* normal text response */ }
+    }
+
     // Handle text content first
     let displayText = text;
 

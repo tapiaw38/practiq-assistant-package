@@ -149,7 +149,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
     const data = await response.json();
     const blocks = data?.data?.blocks;
     if (!Array.isArray(blocks)) return null;
-    return blocks.map((block: { content?: string }) => block.content || "").filter(Boolean).join("\n\n") || null;
+    return JSON.stringify({ copilot_blocks: blocks, suggested_actions: data?.data?.suggested_actions || [] });
   }
 
   // Floating button options

@@ -8,11 +8,14 @@ export interface FloatingButtonOptions {
   onClick?: () => void;
   text?: string;
   container?: HTMLElement | string;
+  draggable?: boolean;
+  storageKey?: string;
 }
 
 export class FloatingButton {
   private element: HTMLButtonElement;
   private options: Required<FloatingButtonOptions>;
+  private dragged = false;
 
   constructor(options: FloatingButtonOptions = {}) {
     this.options = {
@@ -25,6 +28,8 @@ export class FloatingButton {
       onClick: options.onClick || (() => {}),
       text: options.text || "",
       container: options.container || document.body,
+      draggable: options.draggable ?? true,
+      storageKey: options.storageKey || "practiq-assistant:bubble-position",
     };
 
     this.element = document.createElement("button");
@@ -50,9 +55,10 @@ export class FloatingButton {
       avatar.className = "floating-button-avatar";
       this.element.appendChild(avatar);
     } else {
-      const iconSpan = document.createElement("span");
-      iconSpan.innerHTML = icon;
-      this.element.appendChild(iconSpan);
+      const face = document.createElement("span");
+      face.className = "floating-button-face";
+      face.innerHTML = `<span class="floating-button-eye"><i></i></span><span class="floating-button-eye"><i></i></span>`;
+      this.element.appendChild(face);
     }
     if (text) {
       const textSpan = document.createElement("span");
@@ -63,6 +69,7 @@ export class FloatingButton {
 
     // Events
     this.element.addEventListener("click", () => {
+      if (this.dragged) { this.dragged = false; return; }
       if (this.options.onClick) {
         this.options.onClick();
       }
@@ -75,6 +82,7 @@ export class FloatingButton {
     this.element.addEventListener("mouseleave", () => {
       this.element.classList.remove("hovered");
     });
+    this.enableDrag();
   }
 
   public mount(container: HTMLElement | string = document.body): void {
@@ -85,6 +93,7 @@ export class FloatingButton {
 
     if (targetContainer) {
       targetContainer.appendChild(this.element);
+      this.restorePosition();
 
       // Load styles if not already loaded
       if (!document.getElementById("floating-button-styles")) {
@@ -129,6 +138,9 @@ export class FloatingButton {
         object-fit: contain;
         display: block;
       }
+      .floating-button-face { display:flex; gap:7px; align-items:center; }
+      .floating-button-eye { width:13px; height:17px; border-radius:50%; background:#fff; display:grid; place-items:center; }
+      .floating-button-eye i { width:6px; height:6px; border-radius:50%; background:#312e81; }
       
       .floating-button.small {
         width: 40px;
@@ -192,6 +204,32 @@ export class FloatingButton {
     this.options.icon = icon;
     this.options.avatarUrl = "";
     this.render();
+  }
+
+  private enableDrag(): void {
+    if (!this.options.draggable) return;
+    let startX = 0, startY = 0, left = 0, top = 0;
+    this.element.addEventListener("pointerdown", (event) => {
+      startX = event.clientX; startY = event.clientY;
+      const rect = this.element.getBoundingClientRect(); left = rect.left; top = rect.top;
+      this.element.setPointerCapture(event.pointerId);
+    });
+    this.element.addEventListener("pointermove", (event) => {
+      if (!this.element.hasPointerCapture(event.pointerId)) return;
+      const x = Math.max(8, Math.min(window.innerWidth - this.element.offsetWidth - 8, left + event.clientX - startX));
+      const y = Math.max(8, Math.min(window.innerHeight - this.element.offsetHeight - 8, top + event.clientY - startY));
+      this.dragged ||= Math.abs(event.clientX - startX) + Math.abs(event.clientY - startY) > 5;
+      this.element.style.cssText += `;left:${x}px;top:${y}px;right:auto;bottom:auto`;
+    });
+    this.element.addEventListener("pointerup", (event) => {
+      if (!this.element.hasPointerCapture(event.pointerId)) return;
+      this.element.releasePointerCapture(event.pointerId);
+      if (this.dragged) localStorage.setItem(this.options.storageKey, JSON.stringify({left:this.element.style.left, top:this.element.style.top}));
+    });
+  }
+
+  private restorePosition(): void {
+    try { const saved = JSON.parse(localStorage.getItem(this.options.storageKey) || "null"); if (saved?.left && saved?.top) this.element.style.cssText += `;left:${saved.left};top:${saved.top};right:auto;bottom:auto`; } catch { /* optional storage */ }
   }
 
   public setSize(size: "small" | "medium" | "large"): void {

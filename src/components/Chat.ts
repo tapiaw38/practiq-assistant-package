@@ -1253,6 +1253,15 @@ export class Chat {
     }
   }
 
+  /** Open chat and send a contextual quick action. */
+  public async sendPrompt(prompt: string): Promise<void> {
+    this.open();
+    const textarea = this.chatWindow.querySelector(".ia-chat-input") as HTMLTextAreaElement;
+    if (!textarea) return;
+    textarea.value = prompt;
+    await this.sendMessage();
+  }
+
   /**
    * Loads the necessary CSS styles
    */

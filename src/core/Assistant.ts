@@ -97,6 +97,8 @@ export interface Assistant {
   refreshContext: () => void;
   /** Reset current conversation state and clear rendered messages */
   resetConversation: () => void;
+  /** Open chat and send a quick action with current context. */
+  prompt: (message: string) => Promise<void>;
 }
 
 /**
@@ -235,6 +237,14 @@ export function createAssistant(options: AssistantOptions): Assistant {
 
   // Mount components
   button.mount(buttonOptions.container || document.body);
+  const trackEyes = (event: PointerEvent) => {
+    const rect = (button as any).element?.getBoundingClientRect?.();
+    if (!rect) return;
+    const x = Math.max(-3, Math.min(3, (event.clientX - (rect.left + rect.width / 2)) / 14));
+    const y = Math.max(-3, Math.min(3, (event.clientY - (rect.top + rect.height / 2)) / 14));
+    document.querySelectorAll(".floating-button-eye i").forEach((eye) => (eye as HTMLElement).style.transform = `translate(${x}px, ${y}px)`);
+  };
+  window.addEventListener("pointermove", trackEyes);
   window.addEventListener("practiq:assistant:route-change", handleRouteChange);
 
   // Function to process HTML content
@@ -847,11 +857,16 @@ export function createAssistant(options: AssistantOptions): Assistant {
         "practiq:assistant:route-change",
         handleRouteChange
       );
+      window.removeEventListener("pointermove", trackEyes);
     },
     isOpen: () => !!(chat && chat["isOpen"]),
     hideButton: () => button.hide(),
     showButton: () => button.show(),
     refreshContext: () => resetContextCache(),
     resetConversation: () => resetConversationState(),
+    prompt: async (message: string) => {
+      if (chat) await chat.sendPrompt(message);
+      else pendingOpen = true;
+    },
   };
 }

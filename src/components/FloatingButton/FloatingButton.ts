@@ -121,7 +121,8 @@ export class FloatingButton {
         justify-content: center;
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         position: fixed;
-        z-index: 1000;
+        /* Stay visible when chat overlay is open on desktop too. */
+        z-index: 1002;
         outline: none;
         transition: all 0.3s ease;
         font-size: 24px;

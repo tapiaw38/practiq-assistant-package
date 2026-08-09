@@ -2036,7 +2036,7 @@ export class Chat {
         max-width: 260px;
       }
       .ia-audio-controls { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:18px; background:rgba(255,255,255,.68); border:1px solid rgba(18,60,82,.08); }
-      .ia-audio-toggle { width:32px; height:32px; border:0; border-radius:50%; background:${primaryColor}; color:white; cursor:pointer; font-size:13px; display:grid; place-items:center; padding-left:2px; }
+      .ia-audio-toggle { appearance:none; box-sizing:border-box; flex:0 0 36px; width:36px; min-width:36px; height:36px; border:0; border-radius:50%; background:${primaryColor}; color:white; cursor:pointer; font-size:13px; line-height:1; display:grid; place-items:center; padding:0 0 0 2px; }
       .ia-audio-time { white-space:nowrap; font-size:12px; font-weight:700; color:#475569; font-variant-numeric:tabular-nums; }
       .ia-audio-progress { min-width:0; width:100%; accent-color:${primaryColor}; cursor:pointer; }
     `;

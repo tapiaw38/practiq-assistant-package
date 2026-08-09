@@ -69,6 +69,7 @@ export interface ChatOptions {
   audioAnswers?: boolean;
   /** Enable recording and sending audio messages */
   audioInput?: boolean;
+  quickActions?: Array<{ label: string; prompt: string }>;
 }
 
 /**
@@ -161,6 +162,7 @@ export class Chat {
       ...(typeof options.audioInput !== "undefined"
         ? { audioInput: !!options.audioInput }
         : {}),
+      quickActions: options.quickActions || [],
     };
 
     this.createChatElements();
@@ -331,6 +333,19 @@ export class Chat {
     // Assemble components
     this.chatWindow.appendChild(header);
     this.chatWindow.appendChild(this.messageList);
+    if (this.options.quickActions.length) {
+      const actions = document.createElement("div");
+      actions.className = "ia-chat-quick-actions";
+      actions.style.cssText = "display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px;border-top:1px solid rgba(0,0,0,.06)";
+      for (const action of this.options.quickActions) {
+        const button = document.createElement("button");
+        button.type = "button"; button.textContent = action.label;
+        button.style.cssText = "border:0;border-radius:999px;padding:6px 9px;cursor:pointer;background:rgba(99,102,241,.12);color:#4338ca;font-size:12px";
+        button.addEventListener("click", () => this.sendPrompt(action.prompt));
+        actions.appendChild(button);
+      }
+      this.chatWindow.appendChild(actions);
+    }
     this.chatWindow.appendChild(checkboxContainer);
     this.chatWindow.appendChild(this.inputArea);
     this.container.appendChild(this.chatWindow);

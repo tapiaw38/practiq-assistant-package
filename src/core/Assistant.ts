@@ -32,6 +32,8 @@ export interface AssistantOptions {
   audioAnswers?: boolean;
   /** Enable recording and sending audio messages */
   audioInput?: boolean;
+  /** Contextual actions rendered above input. */
+  quickActions?: Array<{ label: string; prompt: string }>;
   /** Specific options for the floating button */
   buttonOptions?: {
     /** Background color of the button */
@@ -175,6 +177,11 @@ export function createAssistant(options: AssistantOptions): Assistant {
     showImagesOption: options.searchImages ?? false,
     audioAnswers: options.audioAnswers ?? false,
     audioInput: options.audioInput ?? false,
+    quickActions: options.quickActions || [
+      { label: "Dame una pista", prompt: "Dame una pista sin decirme la respuesta." },
+      { label: "Explicame", prompt: "Explicame paso a paso." },
+      { label: "Revisá mi respuesta", prompt: "Revisá mi respuesta y decime cómo mejorarla." },
+    ],
   };
 
   // Create components

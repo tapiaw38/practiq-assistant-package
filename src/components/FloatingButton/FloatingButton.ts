@@ -312,7 +312,7 @@ export class FloatingButton {
     if (window.innerWidth <= 720) return;
     this.element.classList.add("floating-button--chat-anchor");
     this.element.style.left = `${Math.max(8, chatLeft + 18)}px`;
-    this.element.style.top = `${Math.max(8, chatTop - 46)}px`;
+    this.element.style.top = `${Math.max(8, chatTop - this.element.offsetHeight + 6)}px`;
     this.element.style.right = "auto";
     this.element.style.bottom = "auto";
   }

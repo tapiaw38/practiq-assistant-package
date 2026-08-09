@@ -227,7 +227,7 @@ export class Chat {
     title.textContent = this.options.title;
     const contextLabel = document.createElement("span");
     contextLabel.className = "ia-chat-context-label";
-    contextLabel.style.cssText = "display:none;margin-left:8px;padding:3px 7px;border-radius:999px;background:rgba(255,255,255,.2);font-size:11px;font-weight:600";
+    contextLabel.style.cssText = "display:none;flex:0 0 auto;margin-left:6px;padding:3px 7px;border-radius:999px;background:rgba(255,255,255,.2);font-size:11px;font-weight:700;white-space:nowrap";
     this.contextLabel = contextLabel;
 
     const headerActions = document.createElement("div");

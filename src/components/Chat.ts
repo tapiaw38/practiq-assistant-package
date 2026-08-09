@@ -223,7 +223,13 @@ export class Chat {
 
     const title = document.createElement("div");
     title.className = "ia-chat-title";
-    title.textContent = this.options.title;
+    const titleRobot = document.createElement("span");
+    titleRobot.className = "ia-chat-title-robot";
+    titleRobot.setAttribute("aria-hidden", "true");
+    titleRobot.innerHTML = '<span class="ia-chat-title-antenna"></span><span class="ia-chat-title-face"><i></i><i></i></span>';
+    const titleText = document.createElement("span");
+    titleText.textContent = this.options.title;
+    title.append(titleRobot, titleText);
 
     const headerActions = document.createElement("div");
     headerActions.className = "ia-chat-header-actions";
@@ -482,25 +488,6 @@ export class Chat {
       }
     });
 
-    // Reproducir audio si existe un botón de audio
-    this.messageList.addEventListener("click", (e) => {
-      const target = e.target as HTMLElement;
-      if (
-        target.classList.contains("ia-audio-play-btn") ||
-        target.closest(".ia-audio-play-btn")
-      ) {
-        const btn = target.classList.contains("ia-audio-play-btn")
-          ? target
-          : target.closest(".ia-audio-play-btn");
-        const audio = btn?.parentElement?.querySelector(
-          ".ia-audio-player"
-        ) as HTMLAudioElement;
-        if (audio) {
-          audio.style.display = "block";
-          audio.play();
-        }
-      }
-    });
   }
 
   /**
@@ -1031,26 +1018,58 @@ export class Chat {
         audioContainer.className = "ia-audio-container";
         audioContainer.style.marginTop = "8px";
 
+        const controls = document.createElement("div");
+        controls.className = "ia-audio-controls";
         const playButton = document.createElement("button");
-        playButton.className = "ia-audio-play-btn";
-        playButton.innerHTML = `
-          <svg class="ia-audio-icon" viewBox="0 0 24 24">
-            <path d="M8 5v14l11-7z"/>
-          </svg>
-          Audio
-        `;
+        playButton.type = "button";
+        playButton.className = "ia-audio-toggle";
+        playButton.setAttribute("aria-label", "Reproducir audio");
+        playButton.textContent = "▶";
+        const time = document.createElement("span");
+        time.className = "ia-audio-time";
+        time.textContent = "0:00 / 0:00";
+        const progress = document.createElement("input");
+        progress.className = "ia-audio-progress";
+        progress.type = "range";
+        progress.min = "0";
+        progress.max = "100";
+        progress.value = "0";
+        progress.setAttribute("aria-label", "Progreso de audio");
 
         const audioPlayer = document.createElement("audio");
         audioPlayer.className = "ia-audio-player";
         audioPlayer.src = audioUrl;
         audioPlayer.playbackRate = this.preferences.speed;
-        audioPlayer.controls = true;
+        audioPlayer.preload = "metadata";
         audioPlayer.style.display = "none";
 
-        audioContainer.appendChild(playButton);
-        audioContainer.appendChild(audioPlayer);
+        const formatTime = (seconds: number) => {
+          const value = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+          return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
+        };
+        const sync = () => {
+          const duration = audioPlayer.duration || 0;
+          const current = audioPlayer.currentTime || 0;
+          time.textContent = `${formatTime(current)} / ${formatTime(duration)}`;
+          progress.value = String(duration ? (current / duration) * 100 : 0);
+        };
+        const setPlaying = (playing: boolean) => {
+          playButton.textContent = playing ? "❚❚" : "▶";
+          playButton.setAttribute("aria-label", playing ? "Pausar audio" : "Reproducir audio");
+          audioContainer.classList.toggle("ia-audio-container--playing", playing);
+          messageElement.classList.toggle("ia-message-speaking", playing);
+        };
+        playButton.onclick = () => { if (audioPlayer.paused) audioPlayer.play().catch(() => undefined); else audioPlayer.pause(); };
+        progress.oninput = () => { if (audioPlayer.duration) audioPlayer.currentTime = (Number(progress.value) / 100) * audioPlayer.duration; };
+        audioPlayer.addEventListener("loadedmetadata", sync);
+        audioPlayer.addEventListener("timeupdate", sync);
+        audioPlayer.addEventListener("play", () => setPlaying(true));
+        audioPlayer.addEventListener("pause", () => setPlaying(false));
+        audioPlayer.addEventListener("ended", () => { setPlaying(false); sync(); });
+
+        controls.append(playButton, time, progress);
+        audioContainer.append(controls, audioPlayer);
         if (this.preferences.autoplay) {
-          audioPlayer.style.display = "block";
           audioPlayer.play().catch(() => undefined);
         }
         messageElement.appendChild(audioContainer);
@@ -1491,9 +1510,17 @@ export class Chat {
         color: white;
         font-size: 15px;
         letter-spacing: 0.01em;
-        display: block;
+        display: flex;
+        align-items: center;
+        gap: 8px;
         margin: 0;
       }
+
+      .ia-chat-title-robot { position:relative; width:24px; height:22px; display:grid; place-items:center; flex:0 0 24px; }
+      .ia-chat-title-face { width:21px; height:17px; border:1.5px solid #312e81; border-radius:7px; background:#c7d2fe; box-shadow:inset 0 1px 2px #fff9; display:flex; align-items:center; justify-content:center; gap:4px; }
+      .ia-chat-title-face i { width:4px; height:5px; border-radius:50%; background:#22d3ee; box-shadow:0 0 4px #67e8f9; }
+      .ia-chat-title-antenna { position:absolute; top:0; width:2px; height:5px; background:#312e81; }
+      .ia-chat-title-antenna::after { content:""; position:absolute; top:-2px; left:-2px; width:5px; height:5px; border-radius:50%; background:#fbbf24; }
 
       .ia-chat-new-conv,
       .ia-chat-close {
@@ -2008,71 +2035,17 @@ export class Chat {
         line-height: 1.5;
       }
 
-      .ia-audio-player {
-        display: none;
-        width: 100%;
-        margin-top: 8px;
-      }
-
       .ia-audio-container {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
+        margin-top: 10px;
         max-width: 260px;
       }
-
-      .ia-audio-play-btn {
-        background:
-          linear-gradient(135deg, ${primaryColor} 0%, ${this.darkenColor(primaryColor || "#4a90e2", 12)} 100%);
-        color: white;
-        border: none;
-        border-radius: 999px;
-        padding: 10px 16px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 600;
-        transition: all 0.2s ease;
-        outline: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        box-shadow: 0 10px 18px rgba(18, 60, 82, 0.18);
-        min-width: 132px;
-        justify-content: center;
-        position: relative;
-        overflow: hidden;
-      }
-
-      .ia-audio-play-btn:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 14px 24px rgba(18, 60, 82, 0.22);
-      }
-
-      .ia-audio-icon {
-        width: 16px;
-        height: 16px;
-        display: inline-block;
-        fill: white;
-        flex-shrink: 0;
-      }
-
-      .ia-audio-player {
-        width: 100%;
-        margin-top: 8px;
-        border-radius: 8px;
-        outline: none;
-      }
-
-      .ia-audio-player::-webkit-media-controls-panel {
-        background-color: ${assistantMessageBgColor};
-        border-radius: 8px;
-      }
-
-      .ia-audio-player::-webkit-media-controls-play-button,
-      .ia-audio-player::-webkit-media-controls-pause-button {
-        background-color: ${primaryColor};
-        border-radius: 50%;
-      }
+      .ia-audio-controls { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:18px; background:rgba(255,255,255,.68); border:1px solid rgba(18,60,82,.08); }
+      .ia-audio-toggle { width:32px; height:32px; border:0; border-radius:50%; background:${primaryColor}; color:white; cursor:pointer; font-size:13px; display:grid; place-items:center; padding-left:2px; }
+      .ia-audio-time { white-space:nowrap; font-size:12px; font-weight:700; color:#475569; font-variant-numeric:tabular-nums; }
+      .ia-audio-progress { min-width:0; width:100%; accent-color:${primaryColor}; cursor:pointer; }
+      .ia-message-speaking { animation: ia-audio-glow 1.5s ease-in-out infinite; }
+      @keyframes ia-audio-glow { 0%,100% { box-shadow:0 0 0 0 rgba(202,166,43,.18); } 50% { box-shadow:0 0 0 7px rgba(202,166,43,.12), 0 8px 22px rgba(202,166,43,.20); } }
+      @media (prefers-reduced-motion: reduce) { .ia-message-speaking { animation:none; box-shadow:0 0 0 4px rgba(202,166,43,.14); } }
     `;
 
     document.head.appendChild(styleElement);

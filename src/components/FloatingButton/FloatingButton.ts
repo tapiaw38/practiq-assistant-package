@@ -133,7 +133,7 @@ export class FloatingButton {
         box-shadow: 0 10px 24px rgba(76, 54, 164, .28);
       }
       .floating-button:focus-visible { outline:3px solid #f4c95d; outline-offset:4px; }
-      .floating-button--robot { background:transparent !important; border-radius:0; box-shadow:none; overflow:visible; }
+      .floating-button--robot { background:transparent !important; border-radius:0; box-shadow:none; overflow:visible; touch-action:none; }
       .floating-button--robot:hover, .floating-button--robot.hovered { box-shadow:none; }
       .floating-button--chat-anchor { z-index:1002; }
       .floating-button--speaking .floating-button-face { animation:floating-robot-speaking 1.5s ease-in-out infinite; }

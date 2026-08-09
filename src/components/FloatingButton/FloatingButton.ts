@@ -147,15 +147,15 @@ export class FloatingButton {
         display: block;
       }
       /* Practiq mascot: white helmet, dark visor, cyan eyes and lilac ears. */
-      .floating-button-face { position:relative; width:76%; height:66%; border:2px solid #c4b5fd; border-radius:44% 44% 42% 42% / 48% 48% 44% 44%; background:linear-gradient(145deg,#ffffff 15%,#f7f5ff 64%,#ddd6fe); display:grid; place-items:center; isolation:isolate; box-shadow:inset 0 2px 4px rgba(255,255,255,.92), 0 8px 18px rgba(103,80,198,.24); }
-      .floating-button-screen { position:relative; z-index:1; width:76%; height:54%; border-radius:42% / 48%; background:linear-gradient(145deg,#101735,#030617 72%); display:flex; gap:10px; align-items:center; justify-content:center; box-shadow:inset 0 2px 6px rgba(111,142,255,.16), inset 0 -2px 5px rgba(0,0,0,.55); }
-      .floating-button-eye { width:12px; height:14px; border-radius:50%; background:#5debe7; display:grid; place-items:center; overflow:hidden; box-shadow:0 0 7px rgba(93,235,231,.48); }
-      .floating-button-eye i { width:4px; height:4px; border-radius:50%; background:rgba(4,24,49,.66); transform:translate(1px,1px); }
-      .floating-button-screen b { position:absolute; bottom:6px; width:15px; height:8px; border:3px solid #5debe7; border-top:0; border-radius:0 0 14px 14px; }
-      .floating-button-antenna { position:absolute; z-index:0; top:-9px; width:22px; height:8px; border:2px solid #a78bfa; border-bottom:0; border-radius:50% 50% 2px 2px; background:linear-gradient(#a78bfa,#c4b5fd); box-shadow:0 -1px 4px rgba(124,58,237,.20); }
-      .floating-button-antenna::after { content:""; position:absolute; inset:-3px 4px 2px; border-radius:50%; background:rgba(255,255,255,.35); }
-      .floating-button-ear { position:absolute; z-index:-1; top:33%; width:11px; height:22px; border:2px solid #a78bfa; background:linear-gradient(90deg,#c4b5fd,#a78bfa); box-shadow:0 3px 7px rgba(103,80,198,.18); }
-      .floating-button-ear--left { left:-10px; border-radius:10px 3px 3px 10px; } .floating-button-ear--right { right:-10px; border-radius:3px 10px 10px 3px; background:linear-gradient(90deg,#a78bfa,#c4b5fd); }
+      .floating-button-face { position:relative; box-sizing:border-box; width:96%; height:90%; border:2px solid #d8d0ff; border-radius:34% 34% 30% 30% / 40% 40% 34% 34%; background:linear-gradient(155deg,#ffffff 12%,#fbfaff 57%,#e9e4ff 100%); display:grid; place-items:center; isolation:isolate; box-shadow:inset 0 3px 5px rgba(255,255,255,.98), inset -5px -5px 9px rgba(126,94,230,.14), 0 8px 18px rgba(91,69,181,.20); }
+      .floating-button-screen { position:relative; z-index:1; box-sizing:border-box; width:78%; height:62%; border-radius:26% / 32%; background:radial-gradient(ellipse at 62% 0%,#222c60 0%,#080c22 45%,#02030c 100%); display:flex; gap:15%; align-items:center; justify-content:center; box-shadow:inset 0 2px 7px rgba(146,165,255,.16), inset 0 -3px 7px rgba(0,0,0,.72); }
+      .floating-button-eye { width:23%; aspect-ratio:1; border-radius:28%; background:#62e9e9; display:grid; place-items:center; overflow:hidden; box-shadow:0 0 8px rgba(98,233,233,.34); }
+      .floating-button-eye i { width:43%; aspect-ratio:1; border-radius:24%; background:#cbd5e1; box-shadow:inset 1px 1px 2px #f8fafc, 0 0 4px rgba(51,65,85,.53); transform:translate(0,0); }
+      .floating-button-screen b { position:absolute; bottom:8%; width:20%; height:15%; border:3px solid #62e9e9; border-top:0; border-radius:0 0 15px 15px; box-sizing:border-box; }
+      .floating-button-antenna { position:absolute; z-index:0; top:-10%; width:30%; height:12%; border:2px solid #9e8bfa; border-bottom:0; border-radius:50% 50% 4px 4px; background:linear-gradient(180deg,#9a82f2,#6953d8); box-shadow:inset 0 2px 2px rgba(255,255,255,.38),0 -1px 4px rgba(94,65,205,.22); }
+      .floating-button-antenna::after { content:""; position:absolute; inset:12% 14% 28%; border-radius:50%; background:rgba(230,223,255,.42); }
+      .floating-button-ear { position:absolute; z-index:-1; top:31%; box-sizing:border-box; width:16%; height:35%; border:2px solid #aa99fa; background:linear-gradient(90deg,#c4b8ff,#8f76ed); box-shadow:inset 2px 1px 3px rgba(255,255,255,.36), 0 3px 7px rgba(91,69,181,.18); }
+      .floating-button-ear--left { left:-12%; border-radius:12px 4px 4px 12px; } .floating-button-ear--right { right:-12%; border-radius:4px 12px 12px 4px; background:linear-gradient(90deg,#8f76ed,#c4b8ff); }
       
       .floating-button.small {
         width: 40px;
@@ -164,8 +164,8 @@ export class FloatingButton {
       }
       
       .floating-button.medium {
-        width: 72px;
-        height: 62px;
+        width: 88px;
+        height: 76px;
         font-size: 24px;
       }
       
@@ -200,7 +200,7 @@ export class FloatingButton {
       .floating-button:active {
         transform: scale(0.96);
       }
-      @media (max-width:720px) { .floating-button.medium { width:64px; height:54px; } .floating-button--chat-anchor { width:58px !important; height:50px !important; } }
+      @media (max-width:720px) { .floating-button.medium { width:72px; height:62px; } .floating-button--chat-anchor { width:64px !important; height:55px !important; } }
     `;
     document.head.appendChild(styleElement);
   }

@@ -50,6 +50,9 @@ const assistant = createAssistant({
   apiBaseUrl: "http://localhost:8000",
   // Auth token or API key for the assistant server (required)
   authToken: "your-session-token",
+  // Stable user/session identifier. Enables safe local conversation reuse
+  // without listing every conversation when the widget mounts.
+  conversationStorageKey: "user-123",
   // General options
   title: "Practiq Assistant",
   placeholder: "How can I help you?",
@@ -145,6 +148,13 @@ const assistant = createAssistant({
   audioInput: true, // Enable microphone button and audio uploads
 });
 ```
+
+### Conversation startup
+
+The widget mounts immediately and does not request conversation history during
+startup. When `conversationStorageKey` is supplied, the latest conversation id
+is stored per API URL and host identity, then reused on the next message. The
+host should clear or change this key when the user changes or logs out.
 
 **How it works:**
 

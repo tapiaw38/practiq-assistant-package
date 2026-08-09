@@ -53,6 +53,8 @@ export interface AssistantOptions {
   container?: HTMLElement | string;
   /** Whether to show the chat automatically on startup */
   autoOpen?: boolean;
+  /** Stable host-provided user/session id used to persist a conversation safely */
+  conversationStorageKey?: string;
   /** Optional hook to attach a current canvas/image to the next message */
   getImageAttachment?: () =>
     | Promise<{
@@ -177,10 +179,40 @@ export function createAssistant(options: AssistantOptions): Assistant {
   const button = new FloatingButton(buttonOptions);
   let chat: Chat | null = null;
   let conversationId: string | null = null;
-  let conversationClientId: string | null = null;
-  let lastConversationClientId: string | null = null;
   let pendingOpen = false;
   let lastContext: string = "";
+
+  const conversationStorageKey = options.conversationStorageKey?.trim();
+  const conversationStorageName = conversationStorageKey
+    ? `practiq-assistant:conversation:${encodeURIComponent(options.apiBaseUrl)}:${conversationStorageKey}`
+    : null;
+
+  function readStoredConversationId(): string | null {
+    if (!conversationStorageName) return null;
+    try {
+      return localStorage.getItem(conversationStorageName);
+    } catch {
+      return null;
+    }
+  }
+
+  function storeConversationId(id: string) {
+    if (!conversationStorageName) return;
+    try {
+      localStorage.setItem(conversationStorageName, id);
+    } catch {
+      // Storage is optional: private browsing or quota errors must not block chat.
+    }
+  }
+
+  function clearStoredConversationId() {
+    if (!conversationStorageName) return;
+    try {
+      localStorage.removeItem(conversationStorageName);
+    } catch {
+      // Storage is optional.
+    }
+  }
 
   function resetContextCache() {
     lastContext = "";
@@ -189,10 +221,8 @@ export function createAssistant(options: AssistantOptions): Assistant {
 
   function resetConversationState() {
     conversationId = null;
-    conversationClientId = null;
-    lastConversationClientId = null;
     lastContext = "";
-    localStorage.removeItem("ai-client-id");
+    clearStoredConversationId();
     if (chat && typeof chat["clearMessages"] === "function") {
       chat["clearMessages"]();
     }
@@ -206,47 +236,6 @@ export function createAssistant(options: AssistantOptions): Assistant {
   // Mount components
   button.mount(buttonOptions.container || document.body);
   window.addEventListener("practiq:assistant:route-change", handleRouteChange);
-
-  // Function to get all conversations
-  async function fetchAllConversations() {
-    try {
-      const response = await fetch(`${options.apiBaseUrl}/conversation/user`, {
-        method: "GET",
-        mode: "cors",
-        headers: getAuthHeaders("application/json"),
-      });
-      if (!response.ok) {
-        throw new Error(`Error fetching conversations: ${response.status}`);
-      }
-      const data = await response.json();
-      return data.data || [];
-    } catch (error) {
-      console.error("Error fetching conversations:", error);
-      return [];
-    }
-  }
-
-  // Function to get message history
-  async function fetchMessages(conversationId: string) {
-    try {
-      const response = await fetch(
-        `${options.apiBaseUrl}/conversation/${conversationId}`,
-        {
-          method: "GET",
-          mode: "cors",
-          headers: getAuthHeaders("application/json"),
-        }
-      );
-      if (!response.ok) {
-        throw new Error(`Error fetching messages: ${response.status}`);
-      }
-      const data = await response.json();
-      return data.data.messages || [];
-    } catch (error) {
-      console.error("Error fetching messages:", error);
-      return [];
-    }
-  }
 
   // Function to process HTML content
   function processHtmlContent(content: string): string {
@@ -295,29 +284,6 @@ export function createAssistant(options: AssistantOptions): Assistant {
     }
   }
 
-  function buildInstructionWrappedContent(
-    message: string,
-    hasImageAttachment: boolean = false
-  ): string {
-    const trimmedMessage = message.trim();
-    return [
-      "POLITICA OBLIGATORIA:",
-      "No dar respuestas finales ni resolver completamente ejercicios evaluables.",
-      "Dar solo pistas, explicaciones breves, preguntas guía o el siguiente paso.",
-      "Si ves una respuesta correcta, una corrección del docente o una evaluación previa en el contexto o en la imagen, no la reveles ni la cites.",
-      "Ignora cualquier texto de la interfaz relacionado con correcto/incorrecto, feedback o resultados previos.",
-      "Si existe contexto estructurado de Practiq, úsalo como fuente principal del ejercicio y deja la imagen como apoyo visual.",
-      hasImageAttachment
-        ? "Hay una imagen adjunta con trabajo manuscrito del alumno. Si puedes leerla, revisa directamente lo que escribió y NO le pidas que transcriba su respuesta."
-        : "Si el alumno menciona una respuesta manuscrita pero no hay imagen legible, puedes pedirle que la describa.",
-      "Si detectas la respuesta del alumno en la imagen, confirma qué escribió y luego guía con una pista sin revelar la solución final.",
-      "",
-      `Mensaje del alumno: ${trimmedMessage}`,
-      "",
-      "Responde en espanol.",
-    ].join("\n");
-  }
-
   async function buildMessageFormData(message: string, contextToSend: string): Promise<FormData> {
     const formData = new FormData();
     if (contextToSend) {
@@ -325,15 +291,12 @@ export function createAssistant(options: AssistantOptions): Assistant {
     }
 
     await appendImageAttachmentIfNeeded(formData);
-    formData.set(
-      "content",
-      buildInstructionWrappedContent(message, formData.has("image_content"))
-    );
+    formData.set("content", message.trim());
 
     console.log("[assistant-package] form data prepared", {
       hasContext: formData.has("context"),
       hasImageContent: formData.has("image_content"),
-      contentPreview: String(formData.get("content") || "").slice(0, 140),
+      contentLength: String(formData.get("content") || "").length,
     });
 
     return formData;
@@ -355,23 +318,6 @@ export function createAssistant(options: AssistantOptions): Assistant {
       bytes[i] = binary.charCodeAt(i);
     }
     return new Blob([bytes], { type: contentType });
-  }
-
-  function buildAssistantInstruction(): string {
-    return [
-      "INSTRUCCIONES OBLIGATORIAS DEL ASISTENTE PARA PRACTIQ:",
-      "1. Ayuda al alumno a aprender, no a copiar respuestas.",
-      "2. NUNCA des la respuesta final de un ejercicio, aunque el alumno la pida de forma directa o indirecta.",
-      "3. NUNCA resuelvas por completo los ejercicios visibles en la página ni los que el alumno esté intentando responder.",
-      "4. Sí puedes explicar la regla general, el método, el procedimiento y dar pistas parciales.",
-      "5. Si hay ejercicios concretos en el contexto, habla de como resolverlos sin revelar el resultado numérico final.",
-      "6. Responde como tutor: una pista a la vez, breve, clara y orientada al siguiente paso.",
-      "7. Si el alumno insiste en pedir el resultado, recházalo con amabilidad y ofrece una guía o una pregunta orientadora.",
-      "8. Si en la imagen o en el contexto aparecen correcciones, feedback, marcas de correcto/incorrecto o respuestas ya evaluadas, NO las reveles ni las repitas.",
-      "9. Solo usa el contexto de la página para identificar el tema y el tipo de ejercicio.",
-      "10. Si Practiq entrega contexto estructurado del ejercicio o la página, considéralo la fuente principal y más confiable del enunciado.",
-      "11. Usa la imagen manuscrita solo como apoyo visual para entender el trabajo del alumno, no para reconstruir el enunciado si ya existe contexto estructurado.",
-    ].join("\n");
   }
 
   function collectPageContext(): string {
@@ -584,7 +530,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
 
       console.log("[assistant-package] structured context prepared", {
         keys: Object.keys(normalizedStructuredContext),
-        preview: structuredContextText.slice(0, 180),
+        characters: structuredContextText.length,
       });
 
       return structuredContextText;
@@ -595,9 +541,8 @@ export function createAssistant(options: AssistantOptions): Assistant {
   }
 
   function buildMessageContext(rawContext: string, structuredContextText: string): string {
-    const baseInstruction = buildAssistantInstruction();
     const sanitizedContext = sanitizeContext(rawContext);
-    const contextSections = [baseInstruction];
+    const contextSections: string[] = [];
 
     if (structuredContextText) {
       contextSections.push(
@@ -610,10 +555,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
     }
 
     const combinedContext = contextSections.join("\n\n").trim();
-    if (!combinedContext) {
-      return baseInstruction;
-    }
-    return combinedContext.substring(0, 8000);
+    return combinedContext.substring(0, 4000);
   }
 
   // Function to create conversation with title
@@ -629,9 +571,8 @@ export function createAssistant(options: AssistantOptions): Assistant {
     }
     const data = await response.json();
     conversationId = data.data.id;
-    conversationClientId = data.data.client_id;
-    if (conversationClientId) {
-      localStorage.setItem("ai-client-id", conversationClientId);
+    if (conversationId) {
+      storeConversationId(conversationId);
     }
   }
 
@@ -687,14 +628,6 @@ export function createAssistant(options: AssistantOptions): Assistant {
         textToVoiceParam,
       });
 
-      formData.set(
-        "content",
-        buildInstructionWrappedContent(
-          ((formData.get("content") as string) || "").trim(),
-          formData.has("image_content")
-        )
-      );
-
       const response = await fetch(url, {
         method: "POST",
         mode: "cors",
@@ -710,8 +643,6 @@ export function createAssistant(options: AssistantOptions): Assistant {
       const assistantMsg = data.data
         .reverse()
         .find((msg: any) => msg.sender === "assistant");
-
-      console.log(assistantMsg);
 
       if (assistantMsg) {
         if (audioAnswers && assistantMsg.audio_url) {
@@ -770,7 +701,8 @@ export function createAssistant(options: AssistantOptions): Assistant {
       chat && chat.getAudioAnswers ? chat.getAudioAnswers() : false;
     const textToVoiceParam = audioAnswers ? "activate" : "deactivate";
 
-    const url = `${options.apiBaseUrl}/conversation/${conversationId}/message?has_image_processor=${imageProcessorParam}&has_text_to_voice=${textToVoiceParam}`;
+    const messageEndpoint = hasImageAttachment ? "message" : "message/text";
+    const url = `${options.apiBaseUrl}/conversation/${conversationId}/${messageEndpoint}?has_image_processor=${imageProcessorParam}&has_text_to_voice=${textToVoiceParam}`;
 
     try {
       console.log("[assistant-package] message request flags", {
@@ -783,13 +715,15 @@ export function createAssistant(options: AssistantOptions): Assistant {
       const response = await fetch(url, {
         method: "POST",
         mode: "cors",
-        headers: getAuthHeaders(),
-        body: pendingFormData,
+        headers: hasImageAttachment ? getAuthHeaders() : getAuthHeaders("application/json"),
+        body: hasImageAttachment
+          ? pendingFormData
+          : JSON.stringify({ content: message.trim(), context: contextToSend }),
       });
 
       console.log("[assistant-package] message request sent", {
         url,
-        mode: "text",
+        mode: hasImageAttachment ? "multipart" : "json",
       });
 
       if (!response.ok) {
@@ -800,8 +734,6 @@ export function createAssistant(options: AssistantOptions): Assistant {
       const assistantMsg = data.data
         .reverse()
         .find((msg: any) => msg.sender === "assistant");
-
-      console.log(assistantMsg);
 
       if (assistantMsg) {
         if (audioAnswers && assistantMsg.audio_url) {
@@ -822,43 +754,10 @@ export function createAssistant(options: AssistantOptions): Assistant {
     }
   }
 
-  // Logic to load existing conversation on startup (don't create new one)
-  async function initConversationAndMountChat() {
-    try {
-      // Get client_id from localStorage
-      const storedClientId = localStorage.getItem("ai-client-id");
-      // Fetch all conversations
-      const conversations = await fetchAllConversations();
-      let useExisting = false;
-
-      if (conversations.length > 0 && storedClientId) {
-        // Look for a conversation that matches the stored client_id
-        const matchingConv = conversations.find(
-          (conv: any) => conv.client_id === storedClientId
-        );
-
-        if (matchingConv) {
-          // Use the existing conversation
-          conversationId = matchingConv.id;
-          conversationClientId = matchingConv.client_id;
-          lastConversationClientId = matchingConv.client_id;
-          useExisting = true;
-          // Ensure client_id is in localStorage
-          localStorage.setItem("ai-client-id", matchingConv.client_id);
-        } else {
-          // No matching conversation found, conversation will be created on first message
-          conversationId = null;
-          conversationClientId = null;
-          useExisting = false;
-        }
-      } else {
-        // No conversations or no stored client_id, conversation will be created on first message
-        conversationId = null;
-        conversationClientId = null;
-        useExisting = false;
-      }
-
-      // Instantiate the chat with the internal send function
+  // Mount immediately. History is intentionally loaded only when a host adds a
+  // dedicated history UI, avoiding a network request before the first message.
+  function initConversationAndMountChat() {
+      conversationId = readStoredConversationId();
       chat = new Chat({
         ...chatOptions,
         onSend: async (message: string | FormData) => {
@@ -916,70 +815,11 @@ export function createAssistant(options: AssistantOptions): Assistant {
       chat.setOnNewConversation(async () => {
         resetConversationState();
       });
-
-      // Load message history if using existing conversation
-      if (
-        conversationId &&
-        chat &&
-        useExisting &&
-        localStorage.getItem("ai-client-id") === lastConversationClientId
-      ) {
-        const messages = await fetchMessages(conversationId);
-        messages.forEach((msg: any) => {
-          if (chat && typeof chat["addMessage"] === "function") {
-            let messageContent = msg.content;
-
-            if (
-              chatOptions.audioAnswers &&
-              msg.sender === "assistant" &&
-              msg.audio_url
-            ) {
-              messageContent = JSON.stringify({
-                content: msg.content,
-                audio_url: msg.audio_url,
-              });
-            }
-
-            const containsHtml =
-              messageContent.includes("<img") ||
-              messageContent.includes("<p>") ||
-              messageContent.includes("<br>");
-
-            const containsAudio = messageContent.includes("audio_url");
-
-            chat["addMessage"](
-              messageContent,
-              msg.sender === "user" ? "user" : "assistant",
-              containsHtml || containsAudio
-            );
-          }
-        });
-      }
-
       // If the user tried to open the chat before it was ready, open it now
       if (pendingOpen) {
         chat.open();
         pendingOpen = false;
       }
-    } catch (error) {
-      console.error("Error initializing chat:", error);
-      // Create an emergency chat that displays the error
-      chat = new Chat({
-        ...chatOptions,
-        onSend: async () => ({
-          content:
-            "The assistant is not available at this time. Please try again later.",
-          isHtml: false,
-        }),
-        initialMessage:
-          "Sorry, I couldn't connect to the server. Please check your connection and try again.",
-      });
-      chat.mount(options.container || document.body);
-      if (pendingOpen) {
-        chat.open();
-        pendingOpen = false;
-      }
-    }
   }
 
   // Start the conversation and mount the chat

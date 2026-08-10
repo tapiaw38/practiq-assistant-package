@@ -147,9 +147,21 @@ export function createAssistant(options: AssistantOptions): Assistant {
   async function sendCopilotMessage(message: string): Promise<string | null> {
     if (!options.copilotBaseUrl || !options.getStructuredContext) return null;
     const context = await options.getStructuredContext();
-    const active = context?.active_exercise as { id?: string; student_answer?: string } | undefined;
+    const active = context?.active_exercise as {
+      id?: string;
+      student_answer?: string;
+      student_answer_raw?: string;
+    } | undefined;
     const intent = inferCopilotIntent(message);
-    const payload = { exercise_id: active?.id || "", context_id: active?.id || "", question: message, intent, student_answer: active?.student_answer || "" };
+    const payload = {
+      exercise_id: active?.id || "",
+      context_id: active?.id || "",
+      question: message,
+      intent,
+      // Host apps may provide a display-safe answer plus canonical value.
+      // Copilot needs the latter to review placements precisely.
+      student_answer: active?.student_answer_raw ?? active?.student_answer ?? "",
+    };
     const streamResponse = await fetch(`${options.copilotBaseUrl}/stream`, {
       method: "POST", headers: { ...getAuthHeaders("application/json"), Accept: "text/event-stream" }, body: JSON.stringify(payload),
     });
@@ -657,8 +669,14 @@ export function createAssistant(options: AssistantOptions): Assistant {
         return "";
       }
 
+      const contextForAssistant = JSON.parse(JSON.stringify(normalizedStructuredContext));
+      // Canonical answer values are for Practiq's trusted Copilot request only.
+      // Do not expose them to Gillie's general conversational context.
+      if (contextForAssistant.active_exercise && typeof contextForAssistant.active_exercise === "object") {
+        delete contextForAssistant.active_exercise.student_answer_raw;
+      }
       const structuredContextText = JSON.stringify(
-        normalizedStructuredContext,
+        contextForAssistant,
         null,
         2
       ).substring(0, 4000);

@@ -741,9 +741,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
     formData.set("context", contextToSend);
     await appendImageAttachmentIfNeeded(formData);
 
-    // Get audio answers state and add query parameter
-    const audioAnswers =
-      chat && chat.getAudioAnswers ? chat.getAudioAnswers() : false;
+    const audioAnswers = chat?.getAudioAnswers?.() ?? false;
     const textToVoiceParam = audioAnswers ? "activate" : "deactivate";
 
     // Get checkbox state and add query parameter
@@ -803,8 +801,15 @@ export function createAssistant(options: AssistantOptions): Assistant {
     message: string,
     context: string = ""
   ): Promise<string> {
-    const copilotResponse = await sendCopilotMessage(message);
-    if (copilotResponse) return processHtmlContent(copilotResponse);
+    // Copilot produces structured text only. When voice is enabled, route
+    // through Gillie instead: it already returns content plus audio_url.
+    const audioAnswers = chat?.getAudioAnswers?.() ?? false;
+    if (!audioAnswers) {
+      const copilotResponse = await sendCopilotMessage(message);
+      if (copilotResponse) return processHtmlContent(copilotResponse);
+    } else {
+      chat?.setTypingStatus("Generando respuesta con voz…");
+    }
     // Create conversation if it doesn't exist yet
     if (!conversationId) {
       const title = message.substring(0, 20) || chatOptions.title || "Nueva conversación";
@@ -833,9 +838,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
     // Attachments need Vision analysis, not image search by default.
     const imageProcessorParam = showImages ? "activate" : "deactivate";
 
-    // Get audio answers state and add query parameter
-    const audioAnswers =
-      chat && chat.getAudioAnswers ? chat.getAudioAnswers() : false;
+    // Same preference selected above decides Gillie TTS.
     const textToVoiceParam = audioAnswers ? "activate" : "deactivate";
 
     const messageEndpoint = hasImageAttachment ? "message" : "message/text";

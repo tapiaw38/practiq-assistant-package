@@ -1265,9 +1265,14 @@ export class Chat {
   }
 
   /** Updates visible progress without exposing transport details to host apps. */
-  public setTypingStatus(message: string): void {
+  public setTypingStatus(_message: string): void {
     const typingElement = this.messageList.querySelector("#ia-typing-indicator");
-    if (typingElement && message.trim()) typingElement.textContent = message;
+    // Every transport state uses the same unobtrusive typing animation.
+    // Do not replace its dots with implementation-specific status text.
+    if (typingElement && !typingElement.querySelector(".ia-typing-dot")) {
+      typingElement.innerHTML =
+        '<span class="ia-typing-dot"></span><span class="ia-typing-dot"></span><span class="ia-typing-dot"></span>';
+    }
   }
 
   private toggleMobileExpanded(): void {

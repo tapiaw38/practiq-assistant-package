@@ -72,6 +72,20 @@ export interface AssistantOptions {
         contentType?: string;
       }
     | null;
+  /** Optional host-provided statement audio for Gillie's voice channel. */
+  getMediaAttachments?: () =>
+    | Array<{
+        dataUrl: string;
+        filename?: string;
+        contentType?: string;
+        field: "voice_content";
+      }>
+    | Promise<Array<{
+        dataUrl: string;
+        filename?: string;
+        contentType?: string;
+        field: "voice_content";
+      }>>;
   /** Optional hook to collect structured page/exercise context from the host app */
   getStructuredContext?: () =>
     | Promise<Record<string, unknown> | null>
@@ -431,6 +445,32 @@ export function createAssistant(options: AssistantOptions): Assistant {
     }
   }
 
+  async function appendMediaAttachmentsIfNeeded(formData: FormData): Promise<void> {
+    if (!options.getMediaAttachments) return;
+    const instruction = "El primer audio adjunto pertenece al enunciado del docente. Escúchalo como parte del ejercicio, no como una consulta del alumno.";
+    if (String(formData.get("context") || "").includes(instruction)) return;
+    try {
+      const attachments = await options.getMediaAttachments();
+      for (const attachment of attachments) {
+        if (!attachment?.dataUrl || attachment.field !== "voice_content") continue;
+        // Preserve a student's recorded question too. Put statement audio
+        // first so Gillie can identify it from the context instruction.
+        const existingVoice = formData.getAll("voice_content");
+        formData.delete("voice_content");
+        formData.append(
+          "voice_content",
+          dataUrlToBlob(attachment.dataUrl, attachment.contentType || "audio/mpeg"),
+          attachment.filename || "statement-audio.mp3",
+        );
+        for (const voice of existingVoice) formData.append("voice_content", voice);
+        const context = String(formData.get("context") || "").trim();
+        formData.set("context", context ? `${context}\n\n${instruction}` : instruction);
+      }
+    } catch (error) {
+      console.error("Error getting statement media attachments:", error);
+    }
+  }
+
   async function buildMessageFormData(message: string, contextToSend: string): Promise<FormData> {
     const formData = new FormData();
     if (contextToSend) {
@@ -438,6 +478,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
     }
 
     await appendImageAttachmentIfNeeded(formData);
+    await appendMediaAttachmentsIfNeeded(formData);
     formData.set("content", message.trim());
 
     console.log("[assistant-package] form data prepared", {
@@ -758,6 +799,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
     // Update FormData with processed context
     formData.set("context", contextToSend);
     await appendImageAttachmentIfNeeded(formData);
+    await appendMediaAttachmentsIfNeeded(formData);
 
     const audioAnswers = chat?.getAudioAnswers?.() ?? false;
     const textToVoiceParam = audioAnswers ? "activate" : "deactivate";
@@ -766,8 +808,9 @@ export function createAssistant(options: AssistantOptions): Assistant {
     const showImages =
       chat && chat.getShowImages ? chat.getShowImages() : false;
     const hasImageAttachment = formData.has("image_content");
-    // Attachments need Vision analysis, not image search by default.
-    const imageProcessorParam = showImages ? "activate" : "deactivate";
+    // A real image attachment must enable Gillie Vision even when image search
+    // is disabled in the chat preferences.
+    const imageProcessorParam = hasImageAttachment || showImages ? "activate" : "deactivate";
 
     const url = `${options.apiBaseUrl}/conversation/${conversationId}/message?has_image_processor=${imageProcessorParam}&has_text_to_voice=${textToVoiceParam}`;
 
@@ -819,19 +862,11 @@ export function createAssistant(options: AssistantOptions): Assistant {
     message: string,
     context: string = ""
   ): Promise<string> {
-    // Copilot produces structured text only. When voice is enabled, route
-    // through Gillie instead: it already returns content plus audio_url.
+    // Copilot handles text only. Media is resolved below before choosing a
+    // transport, because image/audio statements must reach Gillie.
     const audioAnswers = chat?.getAudioAnswers?.() ?? false;
-    if (!audioAnswers) {
-      const copilotResponse = await sendCopilotMessage(message);
-      if (copilotResponse) return processHtmlContent(copilotResponse);
-    } else {
+    if (audioAnswers) {
       chat?.setTypingStatus("Generando respuesta con voz…");
-    }
-    // Create conversation if it doesn't exist yet
-    if (!conversationId) {
-      const title = message.substring(0, 20) || chatOptions.title || "Nueva conversación";
-      await createConversation(title);
     }
 
     if (context === "") {
@@ -853,19 +888,33 @@ export function createAssistant(options: AssistantOptions): Assistant {
       chat && chat.getShowImages ? chat.getShowImages() : false;
     const pendingFormData = await buildMessageFormData(message, contextToSend);
     const hasImageAttachment = pendingFormData.has("image_content");
-    // Attachments need Vision analysis, not image search by default.
-    const imageProcessorParam = showImages ? "activate" : "deactivate";
+    const hasVoiceAttachment = pendingFormData.has("voice_content");
+    const hasMediaAttachment = hasImageAttachment || hasVoiceAttachment;
+    const imageProcessorParam = hasImageAttachment || showImages ? "activate" : "deactivate";
+
+    if (!audioAnswers && !hasMediaAttachment) {
+      const copilotResponse = await sendCopilotMessage(message);
+      if (copilotResponse) return processHtmlContent(copilotResponse);
+    }
+
+    // Create a Gillie conversation only when the message is not handled by
+    // Copilot. This includes all statement media.
+    if (!conversationId) {
+      const title = message.substring(0, 20) || chatOptions.title || "Nueva conversación";
+      await createConversation(title);
+    }
 
     // Same preference selected above decides Gillie TTS.
     const textToVoiceParam = audioAnswers ? "activate" : "deactivate";
 
-    const messageEndpoint = hasImageAttachment ? "message" : "message/text";
+    const messageEndpoint = hasMediaAttachment ? "message" : "message/text";
     const url = `${options.apiBaseUrl}/conversation/${conversationId}/${messageEndpoint}?has_image_processor=${imageProcessorParam}&has_text_to_voice=${textToVoiceParam}`;
 
     try {
       console.log("[assistant-package] message request flags", {
         showImages,
         hasImageAttachment,
+        hasVoiceAttachment,
         imageProcessorParam,
         textToVoiceParam,
       });
@@ -873,15 +922,15 @@ export function createAssistant(options: AssistantOptions): Assistant {
       const response = await fetch(url, {
         method: "POST",
         mode: "cors",
-        headers: hasImageAttachment ? getAuthHeaders() : getAuthHeaders("application/json"),
-        body: hasImageAttachment
+        headers: hasMediaAttachment ? getAuthHeaders() : getAuthHeaders("application/json"),
+        body: hasMediaAttachment
           ? pendingFormData
           : JSON.stringify({ content: message.trim(), context: contextToSend }),
       });
 
       console.log("[assistant-package] message request sent", {
         url,
-        mode: hasImageAttachment ? "multipart" : "json",
+        mode: hasMediaAttachment ? "multipart" : "json",
       });
 
       if (!response.ok) {
@@ -926,11 +975,12 @@ export function createAssistant(options: AssistantOptions): Assistant {
           // Handle FormData (audio messages)
           if (message instanceof FormData) {
             const textContent = String(message.get("content") || "").trim();
-            const voiceContent = message.get("voice_content");
             // Resolve host image before choosing transport. Previously this ran
             // inside sendFormDataToApi, after Copilot had already discarded it.
             await appendImageAttachmentIfNeeded(message);
+            await appendMediaAttachmentsIfNeeded(message);
             const hasImageAttachment = message.has("image_content");
+            const voiceContent = message.get("voice_content");
             // Chat emits text as FormData too. Route text through Practiq Copilot;
             // keep audio and Vision attachments on existing Gillie transport.
             if (textContent && !hasImageAttachment && !(voiceContent instanceof Blob && voiceContent.size > 0)) {

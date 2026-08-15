@@ -808,9 +808,9 @@ export function createAssistant(options: AssistantOptions): Assistant {
     const showImages =
       chat && chat.getShowImages ? chat.getShowImages() : false;
     const hasImageAttachment = formData.has("image_content");
-    // A real image attachment must enable Gillie Vision even when image search
-    // is disabled in the chat preferences.
-    const imageProcessorParam = hasImageAttachment || showImages ? "activate" : "deactivate";
+    // Gillie analyzes image_content independently. This flag enables its
+    // document-image search, which must remain an explicit user preference.
+    const imageProcessorParam = showImages ? "activate" : "deactivate";
 
     const url = `${options.apiBaseUrl}/conversation/${conversationId}/message?has_image_processor=${imageProcessorParam}&has_text_to_voice=${textToVoiceParam}`;
 
@@ -890,7 +890,9 @@ export function createAssistant(options: AssistantOptions): Assistant {
     const hasImageAttachment = pendingFormData.has("image_content");
     const hasVoiceAttachment = pendingFormData.has("voice_content");
     const hasMediaAttachment = hasImageAttachment || hasVoiceAttachment;
-    const imageProcessorParam = hasImageAttachment || showImages ? "activate" : "deactivate";
+    // An attached image still goes through Gillie Vision. Do not also trigger
+    // document-image search unless the user explicitly enabled it.
+    const imageProcessorParam = showImages ? "activate" : "deactivate";
 
     if (!audioAnswers && !hasMediaAttachment) {
       const copilotResponse = await sendCopilotMessage(message);

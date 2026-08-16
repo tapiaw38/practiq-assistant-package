@@ -732,20 +732,25 @@ export function createAssistant(options: AssistantOptions): Assistant {
 
   function buildMessageContext(rawContext: string, structuredContextText: string): string {
     const sanitizedContext = sanitizeContext(rawContext);
-    const contextSections: string[] = [];
+    const structuredPrefix = "Contexto estructurado de Practiq (fuente confiable):\n";
+    const visiblePrefix = "Contexto visible de la página:\n";
+    let combinedContext = "";
 
     if (structuredContextText) {
-      contextSections.push(
-        `Contexto estructurado de Practiq (fuente confiable):\n${structuredContextText}`
-      );
+      // shrinkStructuredContext guarantees this fits inside the structured
+      // budget, so this never cuts a JSON document mid-object.
+      combinedContext = `${structuredPrefix}${structuredContextText}`;
     }
 
     if (sanitizedContext) {
-      contextSections.push(`Contexto visible de la página:\n${sanitizedContext}`);
+      const separator = combinedContext ? "\n\n" : "";
+      const remaining = maxMessageContextChars - combinedContext.length - separator.length - visiblePrefix.length;
+      if (remaining > 0) {
+        combinedContext += `${separator}${visiblePrefix}${sanitizedContext.substring(0, remaining)}`;
+      }
     }
 
-    const combinedContext = contextSections.join("\n\n").trim();
-    return combinedContext.substring(0, 4000);
+    return combinedContext;
   }
 
   // Function to create conversation with title
@@ -1094,7 +1099,10 @@ export function createAssistant(options: AssistantOptions): Assistant {
 /** Bulky, least essential keys, dropped in this order when the context is too big. */
 const shrinkableContextKeys = ["exercise_list", "answered_exercise_ids", "metadata_summary"];
 
-const maxStructuredContextChars = 4000;
+const maxMessageContextChars = 4000;
+// Keep space for labels and visible-page context. Structured JSON is first,
+// therefore this budget must be strict: slicing it later would corrupt it.
+const maxStructuredContextChars = 3000;
 
 /**
  * Serializes the structured context without ever exceeding the cap.
@@ -1106,8 +1114,8 @@ const maxStructuredContextChars = 4000;
  * discussed earlier. Long sheets crossed the cap; short ones did not, so it
  * only failed sometimes.
  *
- * Dropping whole keys keeps the payload parseable. active_exercise is never
- * dropped: it is the part the answer depends on.
+ * Dropping whole keys keeps the payload parseable. active_exercise is retained
+ * whenever it fits; pathological oversized payloads fall back to a marker.
  */
 function shrinkStructuredContext(context: Record<string, unknown>): string {
   const shrunk: Record<string, unknown> = { ...context };
@@ -1121,13 +1129,41 @@ function shrinkStructuredContext(context: Record<string, unknown>): string {
   }
 
   if (text.length > maxStructuredContextChars) {
-    // Still too big: keep only what the answer cannot do without, compactly.
-    text = JSON.stringify({
+    // Still too big: keep only what the answer cannot do without. Values are
+    // compacted before serializing, never by slicing serialized JSON.
+    const essential = {
       current_view: shrunk.current_view,
       activity_type: shrunk.activity_type,
       active_exercise: shrunk.active_exercise,
-    });
+    };
+    for (let stringLimit = 512; stringLimit >= 8; stringLimit = Math.floor(stringLimit / 2)) {
+      text = JSON.stringify(compactStructuredValue(essential, stringLimit));
+      if (text.length <= maxStructuredContextChars) break;
+    }
+    if (text.length > maxStructuredContextChars) {
+      // Arbitrary host objects can still have thousands of keys. Keep a valid,
+      // bounded summary rather than exceeding the budget or corrupting JSON.
+      text = JSON.stringify({
+        current_view: String(shrunk.current_view ?? "").substring(0, 120),
+        activity_type: String(shrunk.activity_type ?? "").substring(0, 120),
+        active_exercise: "[contexto resumido por tamaño]",
+      });
+    }
   }
 
   return text;
+}
+
+function compactStructuredValue(value: unknown, stringLimit: number, depth = 0): unknown {
+  if (typeof value === "string") return value.substring(0, stringLimit);
+  if (value == null || typeof value !== "object") return value;
+  if (depth >= 3) return "[resumido]";
+  if (Array.isArray(value)) {
+    return value.slice(0, 6).map((item) => compactStructuredValue(item, stringLimit, depth + 1));
+  }
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .slice(0, 12)
+      .map(([key, nestedValue]) => [key, compactStructuredValue(nestedValue, stringLimit, depth + 1)])
+  );
 }

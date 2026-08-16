@@ -716,11 +716,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
       if (contextForAssistant.active_exercise && typeof contextForAssistant.active_exercise === "object") {
         delete contextForAssistant.active_exercise.student_answer_raw;
       }
-      const structuredContextText = JSON.stringify(
-        contextForAssistant,
-        null,
-        2
-      ).substring(0, 4000);
+      const structuredContextText = shrinkStructuredContext(contextForAssistant);
 
       console.log("[assistant-package] structured context prepared", {
         keys: Object.keys(normalizedStructuredContext),
@@ -1093,4 +1089,45 @@ export function createAssistant(options: AssistantOptions): Assistant {
       else pendingOpen = true;
     },
   };
+}
+
+/** Bulky, least essential keys, dropped in this order when the context is too big. */
+const shrinkableContextKeys = ["exercise_list", "answered_exercise_ids", "metadata_summary"];
+
+const maxStructuredContextChars = 4000;
+
+/**
+ * Serializes the structured context without ever exceeding the cap.
+ *
+ * The previous version did `JSON.stringify(...).substring(0, 4000)`, which cuts
+ * mid-object and hands the assistant invalid JSON. It then ignores the context
+ * it was told to trust and answers from conversation history instead — which is
+ * why it could name the exercise the student selected while explaining the one
+ * discussed earlier. Long sheets crossed the cap; short ones did not, so it
+ * only failed sometimes.
+ *
+ * Dropping whole keys keeps the payload parseable. active_exercise is never
+ * dropped: it is the part the answer depends on.
+ */
+function shrinkStructuredContext(context: Record<string, unknown>): string {
+  const shrunk: Record<string, unknown> = { ...context };
+  let text = JSON.stringify(shrunk, null, 2);
+
+  for (const key of shrinkableContextKeys) {
+    if (text.length <= maxStructuredContextChars) break;
+    if (!(key in shrunk)) continue;
+    delete shrunk[key];
+    text = JSON.stringify(shrunk, null, 2);
+  }
+
+  if (text.length > maxStructuredContextChars) {
+    // Still too big: keep only what the answer cannot do without, compactly.
+    text = JSON.stringify({
+      current_view: shrunk.current_view,
+      activity_type: shrunk.activity_type,
+      active_exercise: shrunk.active_exercise,
+    });
+  }
+
+  return text;
 }

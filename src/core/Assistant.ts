@@ -330,6 +330,12 @@ export function createAssistant(options: AssistantOptions): Assistant {
   function resetConversationState() {
     conversationId = null;
     lastContext = "";
+    // The badge names an exercise on the screen being left. Keeping it meant
+    // the chat opened on the next screen still labelled "E5", pointing at an
+    // exercise that is no longer anywhere. The host republishes it whenever
+    // there is a current exercise to name.
+    activeContextLabel = "";
+    chat?.setContextLabel("");
     clearStoredConversationId();
     if (chat && typeof chat["clearMessages"] === "function") {
       chat["clearMessages"]();

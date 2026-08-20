@@ -16,6 +16,11 @@ export class FloatingButton {
   private element: HTMLButtonElement;
   private options: Required<FloatingButtonOptions>;
   private dragged = false;
+  private autoTimer?: number;
+  private gazeResetTimer?: number;
+  private returnTimer?: number;
+  private gazeActiveUntil = 0;
+  private nextGazeAt = 0;
 
   constructor(options: FloatingButtonOptions = {}) {
     this.options = {
@@ -57,7 +62,7 @@ export class FloatingButton {
     } else {
       const face = document.createElement("span");
       face.className = "floating-button-face";
-      face.innerHTML = `<span class="floating-button-antenna"></span><span class="floating-button-ear floating-button-ear--left"></span><span class="floating-button-ear floating-button-ear--right"></span><span class="floating-button-screen"><span class="floating-button-eye"><i></i></span><span class="floating-button-eye"><i></i></span><b></b></span>`;
+      face.innerHTML = `<svg class="floating-button-mascot" viewBox="0 0 1254 1254" aria-hidden="true"><defs><linearGradient id="fb-shell" x1="230" y1="250" x2="1080" y2="1010" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff"/><stop offset=".58" stop-color="#fafafa"/><stop offset="1" stop-color="#ececec"/></linearGradient><linearGradient id="fb-ear" x1="110" y1="642" x2="1144" y2="642" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#6B42FF"/><stop offset="1" stop-color="#8B6BFF"/></linearGradient><linearGradient id="fb-cap" x1="475" y1="272" x2="779" y2="272" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#6B42FF"/><stop offset="1" stop-color="#8766FF"/></linearGradient><linearGradient id="fb-eye" x1="350" y1="554" x2="904" y2="752" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#53DDE9"/><stop offset="1" stop-color="#76EDF2"/></linearGradient></defs><g class="floating-button-head-group"><rect class="floating-button-ear" x="110" y="500" width="113" height="295" rx="47"/><rect class="floating-button-ear" x="1031" y="500" width="113" height="295" rx="47"/><rect class="floating-button-shell" x="190" y="275" width="872" height="740" rx="154"/><rect class="floating-button-cap" x="476" y="223" width="302" height="97" rx="46"/><rect class="floating-button-visor" x="271" y="380" width="709" height="533" rx="98"/><g class="floating-button-eye-group"><rect class="floating-button-eye" x="350" y="554" width="198" height="198" rx="50"/><rect class="floating-button-eye" x="706" y="554" width="198" height="198" rx="50"/></g></g></svg>`;
       this.element.appendChild(face);
     }
     if (text) {
@@ -70,6 +75,10 @@ export class FloatingButton {
     // Events
     this.element.addEventListener("click", () => {
       if (this.dragged) { this.dragged = false; return; }
+      this.element.classList.remove("floating-button--click-compress");
+      void this.element.offsetWidth;
+      this.element.classList.add("floating-button--click-compress");
+      window.setTimeout(() => this.element.classList.remove("floating-button--click-compress"), 300);
       if (this.options.onClick) {
         this.options.onClick();
       }
@@ -94,6 +103,7 @@ export class FloatingButton {
     if (targetContainer) {
       targetContainer.appendChild(this.element);
       this.restorePosition();
+      this.startAutomaticMode();
 
       // Load styles if not already loaded
       if (!document.getElementById("floating-button-styles")) {
@@ -103,6 +113,9 @@ export class FloatingButton {
   }
 
   public unmount(): void {
+    window.clearTimeout(this.autoTimer);
+    window.clearTimeout(this.gazeResetTimer);
+    window.clearTimeout(this.returnTimer);
     if (this.element.parentNode) {
       this.element.parentNode.removeChild(this.element);
     }
@@ -124,10 +137,10 @@ export class FloatingButton {
         /* Stay visible when chat overlay is open on desktop too. */
         z-index: 1002;
         outline: none;
-        transition: transform 160ms ease-out, box-shadow 160ms ease-out;
+        transition: transform 160ms ease-out, box-shadow 160ms ease-out, left 420ms cubic-bezier(.2,.8,.2,1), top 420ms cubic-bezier(.2,.8,.2,1);
         font-size: 24px;
       }
-      
+
       .floating-button:hover, .floating-button.hovered {
         transform: translateY(-2px) scale(1.06);
         box-shadow: 0 10px 24px rgba(76, 54, 164, .28);
@@ -135,6 +148,8 @@ export class FloatingButton {
       .floating-button:focus-visible { outline:3px solid #f4c95d; outline-offset:4px; }
       .floating-button--robot { background:transparent !important; border-radius:0; box-shadow:none; overflow:visible; touch-action:none; }
       .floating-button--robot:hover, .floating-button--robot.hovered { box-shadow:none; }
+      .floating-button--click-compress { transform-origin:right center; animation:floating-robot-click .3s cubic-bezier(.2,.8,.2,1) 1; }
+      @keyframes floating-robot-click { 45% { transform:scaleX(.78) scaleY(1.04); } }
       .floating-button--chat-anchor { z-index:1002; }
       .floating-button--speaking .floating-button-face { animation:floating-robot-speaking 1.5s ease-in-out infinite; }
       @keyframes floating-robot-speaking { 0%,100% { transform:scale(1); box-shadow:inset 0 2px 4px rgba(255,255,255,.92), 0 0 0 0 rgba(244,201,93,.50), 0 8px 18px rgba(103,80,198,.24); } 50% { transform:scale(1.03); box-shadow:inset 0 2px 4px rgba(255,255,255,.92), 0 0 0 9px rgba(244,201,93,.12), 0 10px 23px rgba(181,139,38,.24); } }
@@ -146,61 +161,69 @@ export class FloatingButton {
         object-fit: contain;
         display: block;
       }
-      /* Practiq mascot: white helmet, dark visor, cyan eyes and lilac ears. */
-      .floating-button-face { position:relative; box-sizing:border-box; width:96%; height:90%; border:2px solid #d8d0ff; border-radius:34% 34% 30% 30% / 40% 40% 34% 34%; background:linear-gradient(155deg,#ffffff 12%,#fbfaff 57%,#e9e4ff 100%); display:grid; place-items:center; isolation:isolate; box-shadow:inset 0 3px 5px rgba(255,255,255,.98), inset -5px -5px 9px rgba(126,94,230,.14), 0 8px 18px rgba(91,69,181,.20); }
-      .floating-button-screen { position:relative; z-index:1; box-sizing:border-box; width:75%; height:68%; border-radius:26% / 32%; background:radial-gradient(ellipse at 62% 0%,#222c60 0%,#080c22 45%,#02030c 100%); display:flex; gap:22%; align-items:center; justify-content:center; box-shadow:inset 0 2px 7px rgba(146,165,255,.16), inset 0 -3px 7px rgba(0,0,0,.72); }
-      .floating-button-eye { width:26%; aspect-ratio:1; border-radius:28%; background:#62e9e9; display:grid; place-items:center; overflow:hidden; box-shadow:0 0 8px rgba(98,233,233,.34); }
-      .floating-button-eye i { width:41%; aspect-ratio:1; border-radius:24%; background:#cbd5e1; box-shadow:inset 1px 1px 2px #f8fafc, 0 0 4px rgba(51,65,85,.53); transform:translate(0,0); }
-      .floating-button-screen b { position:absolute; bottom:8%; width:20%; height:15%; border:3px solid #62e9e9; border-top:0; border-radius:0 0 15px 15px; box-sizing:border-box; }
-      .floating-button-antenna { position:absolute; z-index:0; top:-10%; width:30%; height:12%; border:2px solid #9e8bfa; border-bottom:0; border-radius:50% 50% 4px 4px; background:linear-gradient(180deg,#9a82f2,#6953d8); box-shadow:inset 0 2px 2px rgba(255,255,255,.38),0 -1px 4px rgba(94,65,205,.22); }
-      .floating-button-antenna::after { content:""; position:absolute; inset:12% 14% 28%; border-radius:50%; background:rgba(230,223,255,.42); }
-      .floating-button-ear { position:absolute; z-index:-1; top:31%; box-sizing:border-box; width:16%; height:35%; border:2px solid #aa99fa; background:linear-gradient(90deg,#c4b8ff,#8f76ed); box-shadow:inset 2px 1px 3px rgba(255,255,255,.36), 0 3px 7px rgba(91,69,181,.18); }
-      .floating-button-ear--left { left:-12%; border-radius:12px 4px 4px 12px; } .floating-button-ear--right { right:-12%; border-radius:4px 12px 12px 4px; background:linear-gradient(90deg,#8f76ed,#c4b8ff); }
-      
+      /* Direct SVG adaptation of supplied Brilliant mascot. */
+      .floating-button-face { display:block; width:100%; height:100%; filter:drop-shadow(0 8px 12px rgba(91,69,181,.20)); animation:floating-robot-idle 4.8s ease-in-out infinite; }
+      .floating-button-mascot { display:block; width:100%; height:100%; overflow:visible; }
+      .floating-button-ear { fill:url(#fb-ear); }
+      .floating-button-shell { fill:url(#fb-shell); }
+      .floating-button-cap { fill:url(#fb-cap); }
+      .floating-button-visor { fill:#05060b; }
+      .floating-button-eye { fill:url(#fb-eye); transform-box:fill-box; transform-origin:center; }
+      .floating-button-eye-group { transform-box:fill-box; transform-origin:center; transition:transform .28s cubic-bezier(.2,.8,.2,1); }
+      .floating-button--blink .floating-button-eye { animation:floating-robot-blink .16s ease-in-out 1; }
+      .floating-button--nod .floating-button-face { animation:floating-robot-nod .7s ease-in-out 1; }
+      @keyframes floating-robot-idle { 0%,100% { transform:translateY(0) rotate(0); } 25% { transform:translateY(-3px) rotate(-.8deg); } 75% { transform:translateY(-2px) rotate(.8deg); } }
+      @keyframes floating-robot-blink { 50% { transform:scaleY(.08); } }
+      @keyframes floating-robot-nod { 45% { transform:translateY(5px); } }
+
       .floating-button.small {
         width: 40px;
         height: 40px;
         font-size: 18px;
       }
-      
+
       .floating-button.medium {
         width: 88px;
         height: 76px;
         font-size: 24px;
       }
-      
+
       .floating-button.large {
         width: 72px;
         height: 72px;
         font-size: 30px;
       }
-      
+
       /* Posiciones */
       .floating-button.bottom-right {
-        bottom: 20px;
+        bottom: 90px;
         right: 20px;
       }
-      
+
       .floating-button.bottom-left {
-        bottom: 20px;
+        bottom: 90px;
         left: 20px;
       }
-      
+
       .floating-button.top-right {
         top: 20px;
         right: 20px;
       }
-      
+
       .floating-button.top-left {
         top: 20px;
         left: 20px;
       }
-      
+
       /* Animación al hacer clic */
       .floating-button:active {
         transform: scale(0.96);
       }
-      @media (max-width:720px) { .floating-button.medium { width:72px; height:62px; } .floating-button--chat-anchor { width:64px !important; height:55px !important; } }
+      @media (max-width:720px) {
+        .floating-button.medium { width:72px; height:62px; }
+        .floating-button.bottom-right, .floating-button.bottom-left { bottom:max(76px, calc(56px + env(safe-area-inset-bottom))); }
+        .floating-button--chat-anchor { width:64px !important; height:55px !important; }
+      }
     `;
     document.head.appendChild(styleElement);
   }
@@ -228,6 +251,7 @@ export class FloatingButton {
     let dragReady = false;
     let touchHoldTimer: ReturnType<typeof setTimeout> | undefined;
     this.element.addEventListener("pointerdown", (event) => {
+      window.clearTimeout(this.returnTimer);
       startX = event.clientX; startY = event.clientY;
       const rect = this.element.getBoundingClientRect(); left = rect.left; top = rect.top;
       this.element.setPointerCapture(event.pointerId);
@@ -251,7 +275,7 @@ export class FloatingButton {
       if (touchHoldTimer) clearTimeout(touchHoldTimer);
       touchHoldTimer = undefined;
       this.element.releasePointerCapture(event.pointerId);
-      if (this.dragged) localStorage.setItem(this.options.storageKey, JSON.stringify({left:this.element.style.left, top:this.element.style.top}));
+      if (this.dragged) this.scheduleReturnHome();
     });
     this.element.addEventListener("pointercancel", () => {
       if (touchHoldTimer) clearTimeout(touchHoldTimer);
@@ -261,10 +285,35 @@ export class FloatingButton {
   }
 
   private restorePosition(): void {
-    // Stored coordinates predate viewport-aware persistence. Never apply a
-    // desktop coordinate on mobile, where it can place bubble off-screen.
-    if (window.innerWidth <= 720) return;
-    try { const saved = JSON.parse(localStorage.getItem(this.options.storageKey) || "null"); if (saved?.left && saved?.top) this.element.style.cssText += `;left:${saved.left};top:${saved.top};right:auto;bottom:auto`; } catch { /* optional storage */ }
+    // Drag is intentionally temporary: old persisted positions must not make
+    // the mascot start away from its default edge on a new visit.
+    try { localStorage.removeItem(this.options.storageKey); } catch { /* optional storage */ }
+  }
+
+  private scheduleReturnHome(): void {
+    window.clearTimeout(this.returnTimer);
+    this.returnTimer = window.setTimeout(() => this.returnHome(), 4000);
+  }
+
+  private returnHome(): void {
+    const { width, height } = this.element.getBoundingClientRect();
+    const inset = 20;
+    const right = this.options.position.includes("right");
+    const bottom = this.options.position.includes("bottom");
+    const x = right ? window.innerWidth - width - inset : inset;
+    const y = bottom ? window.innerHeight - height - inset : inset;
+    this.element.classList.add("floating-button--returning");
+    this.element.style.left = `${Math.max(8, x)}px`;
+    this.element.style.top = `${Math.max(8, y)}px`;
+    this.element.style.right = "auto";
+    this.element.style.bottom = "auto";
+    window.setTimeout(() => {
+      this.element.style.left = "";
+      this.element.style.top = "";
+      this.element.style.right = "";
+      this.element.style.bottom = "";
+      this.element.classList.remove("floating-button--returning");
+    }, 440);
   }
 
   public setSize(size: "small" | "medium" | "large"): void {
@@ -307,12 +356,12 @@ export class FloatingButton {
     this.element.style.bottom = "auto";
   }
 
-  /** Desktop open state: keep robot away from floating chat panel. */
+  /** Desktop focus state: mascot occupies panel header's left edge. */
   public anchorToDesktopChat(chatTop: number, chatLeft: number): void {
     if (window.innerWidth <= 720) return;
     this.element.classList.add("floating-button--chat-anchor");
-    this.element.style.left = `${Math.max(8, chatLeft + 18)}px`;
-    this.element.style.top = `${Math.max(8, chatTop - this.element.offsetHeight + 6)}px`;
+    this.element.style.left = `${Math.max(8, chatLeft + 14)}px`;
+    this.element.style.top = `${Math.max(8, chatTop + 10)}px`;
     this.element.style.right = "auto";
     this.element.style.bottom = "auto";
   }
@@ -327,7 +376,7 @@ export class FloatingButton {
     // Mobile always returns to a reachable default bubble position.
     if (window.innerWidth <= 720) {
       this.element.style.right = "16px";
-      this.element.style.bottom = "max(16px, env(safe-area-inset-bottom))";
+      this.element.style.bottom = "max(76px, calc(56px + env(safe-area-inset-bottom)))";
       return;
     }
     this.restorePosition();
@@ -335,5 +384,51 @@ export class FloatingButton {
 
   public setSpeaking(speaking: boolean): void {
     this.element.classList.toggle("floating-button--speaking", speaking);
+  }
+
+  /** Automatic idle animation, plus brief mouse tracking at irregular intervals. */
+  public followPointerOccasionally(event: PointerEvent): void {
+    if (event.pointerType === "touch" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const now = Date.now();
+    if (now >= this.nextGazeAt && now >= this.gazeActiveUntil) {
+      this.gazeActiveUntil = now + 700 + Math.random() * 900;
+      this.nextGazeAt = this.gazeActiveUntil + 1800 + Math.random() * 3200;
+    }
+    if (now >= this.gazeActiveUntil) return;
+
+    const rect = this.element.getBoundingClientRect();
+    const x = Math.max(-3, Math.min(3, (event.clientX - (rect.left + rect.width / 2)) / 14));
+    const y = Math.max(-3, Math.min(3, (event.clientY - (rect.top + rect.height / 2)) / 14));
+    this.setEyeOffset(x, y);
+    window.clearTimeout(this.gazeResetTimer);
+    this.gazeResetTimer = window.setTimeout(() => this.setEyeOffset(0, 0), Math.max(0, this.gazeActiveUntil - now));
+  }
+
+  private setEyeOffset(x: number, y: number): void {
+    this.element.querySelectorAll<HTMLElement>(".floating-button-eye-group").forEach((eyes) => {
+      eyes.style.transform = `translate(${x * 7}px, ${y * 7}px)`;
+    });
+  }
+
+  private startAutomaticMode(): void {
+    window.clearTimeout(this.autoTimer);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const next = () => {
+      const roll = Math.random();
+      if (roll < .58) {
+        this.element.classList.remove("floating-button--blink");
+        void this.element.offsetWidth;
+        this.element.classList.add("floating-button--blink");
+      } else if (roll < .80) {
+        this.element.classList.remove("floating-button--nod");
+        void this.element.offsetWidth;
+        this.element.classList.add("floating-button--nod");
+      } else {
+        this.setEyeOffset((Math.random() - .5) * 4, (Math.random() - .5) * 3);
+        window.setTimeout(() => this.setEyeOffset(0, 0), 650);
+      }
+      this.autoTimer = window.setTimeout(next, 1800 + Math.random() * 2600);
+    };
+    this.autoTimer = window.setTimeout(next, 1300 + Math.random() * 1400);
   }
 }

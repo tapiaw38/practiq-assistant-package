@@ -266,6 +266,7 @@ export class Chat {
     headerActions.appendChild(newConvButton);
     const settings = document.createElement("button");
     settings.type = "button"; settings.textContent = "⚙"; settings.title = "Preferencias";
+    settings.className = "ia-chat-settings";
     settings.style.cssText = "border:0;background:transparent;color:inherit;cursor:pointer;font-size:18px";
     settings.onclick = () => this.togglePreferences();
     headerActions.appendChild(settings);
@@ -1432,6 +1433,11 @@ export class Chat {
     return { top: rect.top, left: rect.left };
   }
 
+  /** Enables the desktop focus rail without changing compact/mobile chat. */
+  public setDesktopFocus(enabled: boolean): void {
+    this.chatWindow.classList.toggle("ia-chat-window--desktop-focus", enabled);
+  }
+
   public getIsOpen(): boolean {
     return this.isOpen;
   }
@@ -1519,28 +1525,132 @@ export class Chat {
         top: 20px;
         left: 20px;
       }
+
+      /* Desktop focus rail. Host layout moves only when Assistant finds an
+         explicit app root (#app, #root, main, or desktopFocusTarget). */
+      @media (min-width: 721px) {
+        :root { --practiq-assistant-rail: clamp(320px, 27vw, 430px); }
+        .practiq-assistant-focus-target {
+          box-sizing: border-box;
+        }
+        /* Do not resize the host root here. Some hosts use a full-page flex
+           shell under #app; changing its width makes that shell collapse or
+           paint an empty surface. The host can reserve its own space safely. */
+        .practiq-assistant-focus-target--open {
+          --practiq-assistant-focus-open: 1;
+        }
+        /* Practiq uses a light surface: panel stays translucent, while text and
+           primary controls retain enough contrast over the page behind it. */
+        .ia-chat-window.ia-chat-window--desktop-focus {
+          top: 24px !important;
+          right: 20px !important;
+          bottom: 24px !important;
+          left: auto !important;
+          width: calc(var(--practiq-assistant-rail) - 40px) !important;
+          height: calc(100dvh - 48px) !important;
+          border-radius: 28px;
+          color: #26354d;
+          background: linear-gradient(150deg, rgba(255,255,255,.93), rgba(247,248,255,.85));
+          border-color: rgba(123,77,255,.14);
+          box-shadow: 0 20px 54px rgba(52,42,104,.16);
+          backdrop-filter: blur(22px) saturate(1.05);
+        }
+        .ia-chat-window--desktop-focus .ia-chat-header {
+          min-height: 76px;
+          padding: 16px 12px 14px 104px;
+          background: rgba(255,255,255,.28);
+          border-bottom-color: rgba(123,77,255,.10);
+          color: #4f3891;
+        }
+        .ia-chat-window--desktop-focus .ia-chat-title,
+        .ia-chat-window--desktop-focus .ia-chat-context-label { display: none !important; }
+        .ia-chat-window--desktop-focus .ia-chat-header-actions {
+          gap: 6px;
+          margin-left: auto;
+          flex-shrink: 0;
+        }
+        .ia-chat-window--desktop-focus .ia-chat-new-conv,
+        .ia-chat-window--desktop-focus .ia-chat-close {
+          background: rgba(123,77,255,.07);
+          color: rgba(79,56,145,.56);
+          opacity: .72;
+        }
+        .ia-chat-window--desktop-focus .ia-chat-settings {
+          width: 32px;
+          height: 32px;
+          padding: 0;
+          display: inline-grid;
+          place-items: center;
+          flex: 0 0 32px;
+          border-radius: 999px;
+          background: rgba(123,77,255,.07) !important;
+          color: #5c44aa !important;
+          border: 1px solid rgba(123,77,255,.12) !important;
+          opacity: .88;
+        }
+        .ia-chat-window--desktop-focus .ia-chat-close {
+          width: 32px;
+          min-width: 32px;
+          height: 32px;
+          flex: 0 0 32px;
+          color: #5c44aa;
+          border: 1px solid rgba(123,77,255,.12);
+        }
+        .ia-chat-window--desktop-focus .ia-chat-new-conv:hover,
+        .ia-chat-window--desktop-focus .ia-chat-close:hover {
+          background: rgba(123,77,255,.13);
+        }
+        .ia-chat-window--desktop-focus .ia-chat-messages {
+          background: radial-gradient(circle at 20% 0%, rgba(127,97,255,.08), transparent 35%), transparent;
+        }
+        .ia-chat-window--desktop-focus .ia-chat-message.assistant {
+          color: #32415c;
+          background: rgba(255,255,255,.64);
+          border-color: rgba(123,77,255,.10);
+          box-shadow: none;
+        }
+        .ia-chat-window--desktop-focus .ia-chat-message.user { box-shadow: none; }
+        .ia-chat-window--desktop-focus .ia-chat-input-area,
+        .ia-chat-window--desktop-focus .ia-chat-checkbox-container {
+          background: rgba(255,255,255,.44);
+          border-color: rgba(123,77,255,.10);
+        }
+        .ia-chat-window--desktop-focus .ia-chat-input {
+          color: #32415c;
+          background: rgba(255,255,255,.78);
+          border-color: rgba(123,77,255,.16);
+          box-shadow: none;
+        }
+        .ia-chat-window--desktop-focus .ia-chat-input::placeholder { color: rgba(75,89,118,.46); }
+        .ia-chat-window--desktop-focus .ia-chat-send,
+        .ia-chat-window--desktop-focus .ia-chat-record {
+          opacity: .72;
+          box-shadow: 0 0 0 1px rgba(123,77,255,.14), 0 8px 14px rgba(81,60,154,.14);
+        }
+        .ia-chat-window--desktop-focus .ia-chat-checkbox-label { color: rgba(60,74,105,.62); }
+      }
       
       .ia-chat-header {
-        background:
-          linear-gradient(135deg, ${primaryColor} 0%, ${this.darkenColor(primaryColor || "#4a90e2", 12)} 100%);
-        color: white;
+        background: rgba(255,255,255,.88);
+        color: #4f3891;
         padding: 16px 18px 14px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        border-bottom: 1px solid rgba(123,77,255,.10);
       }
 
       .ia-chat-header-actions {
         display: flex;
         align-items: center;
         gap: 10px;
-        margin-left: 12px;
+        margin-left: auto;
+        flex-shrink: 0;
       }
       
       .ia-chat-title {
         font-weight: 700;
-        color: white;
+        color: #31405b;
         font-size: 15px;
         letter-spacing: 0.01em;
         display: block;
@@ -1550,9 +1660,9 @@ export class Chat {
       .ia-chat-new-conv,
       .ia-chat-close {
         appearance: none;
-        border: none;
-        background: rgba(255, 255, 255, 0.14);
-        color: white;
+        border: 1px solid rgba(123,77,255,.12);
+        background: rgba(123,77,255,.07);
+        color: #5c44aa;
         cursor: pointer;
         outline: none;
         transition: background-color 0.18s ease, transform 0.18s ease, opacity 0.18s ease;
@@ -1572,7 +1682,7 @@ export class Chat {
 
       .ia-chat-new-conv:hover,
       .ia-chat-close:hover {
-        background: rgba(255, 255, 255, 0.22);
+        background: rgba(123,77,255,.13);
         transform: translateY(-1px);
       }
       
@@ -1609,6 +1719,22 @@ export class Chat {
         line-height: 1;
         padding: 0;
       }
+
+      .ia-chat-settings {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        display: inline-grid;
+        place-items: center;
+        flex: 0 0 32px;
+        border-radius: 999px !important;
+        background: rgba(123,77,255,.07) !important;
+        color: #5c44aa !important;
+        border: 1px solid rgba(123,77,255,.12) !important;
+      }
+
+      .ia-chat-title,
+      .ia-chat-context-label { display: none !important; }
 
       /* Prevent focus visual effects on header buttons */
       .ia-chat-new-conv:focus,

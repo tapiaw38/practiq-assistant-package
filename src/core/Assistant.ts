@@ -57,6 +57,10 @@ export interface AssistantOptions {
   container?: HTMLElement | string;
   /** Whether to show the chat automatically on startup */
   autoOpen?: boolean;
+  /** Desktop focused layout while assistant chat is open. Enabled by default. */
+  desktopFocus?: boolean;
+  /** Optional host root to compress. Defaults to #app, #root, then main. */
+  desktopFocusTarget?: HTMLElement | string;
   /** Stable host-provided user/session id used to persist a conversation safely */
   conversationStorageKey?: string;
   /** Optional hook to attach a current canvas/image to the next message */
@@ -289,6 +293,22 @@ export function createAssistant(options: AssistantOptions): Assistant {
   let conversationId: string | null = null;
   let pendingOpen = false;
   let lastContext: string = "";
+  let desktopFocusTarget: HTMLElement | null | undefined;
+
+  const resolveDesktopFocusTarget = (): HTMLElement | null => {
+    if (typeof desktopFocusTarget !== "undefined") return desktopFocusTarget;
+    const configured = options.desktopFocusTarget;
+    if (configured instanceof HTMLElement) desktopFocusTarget = configured;
+    else if (typeof configured === "string") desktopFocusTarget = document.querySelector(configured) as HTMLElement | null;
+    else desktopFocusTarget = document.querySelector("#app, #root, main") as HTMLElement | null;
+    return desktopFocusTarget;
+  };
+
+  const setDesktopFocus = (enabled: boolean): void => {
+    const target = resolveDesktopFocusTarget();
+    target?.classList.toggle("practiq-assistant-focus-target--open", enabled);
+    if (target) target.classList.add("practiq-assistant-focus-target");
+  };
 
   const conversationStorageKey = options.conversationStorageKey?.trim();
   const conversationStorageName = conversationStorageKey
@@ -372,6 +392,9 @@ export function createAssistant(options: AssistantOptions): Assistant {
     button.hide();
   };
   const syncChatBubble = () => {
+    const focused = Boolean(chat?.getIsOpen() && options.desktopFocus !== false && window.innerWidth > 720);
+    setDesktopFocus(focused);
+    chat?.setDesktopFocus(focused);
     if (!chat?.getIsOpen()) { button.restoreFromMobileChat(); return; }
     if (window.innerWidth > 720) {
       const position = chat.getDesktopChatTopLeft();
@@ -389,13 +412,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
     activeContextLabel = String((event as CustomEvent<{ label?: string }>).detail?.label || "");
     chat?.setContextLabel(activeContextLabel);
   };
-  const trackEyes = (event: PointerEvent) => {
-    const rect = (button as any).element?.getBoundingClientRect?.();
-    if (!rect) return;
-    const x = Math.max(-3, Math.min(3, (event.clientX - (rect.left + rect.width / 2)) / 14));
-    const y = Math.max(-3, Math.min(3, (event.clientY - (rect.top + rect.height / 2)) / 14));
-    document.querySelectorAll(".floating-button-eye i").forEach((eye) => (eye as HTMLElement).style.transform = `translate(${x}px, ${y}px)`);
-  };
+  const trackEyes = (event: PointerEvent) => button.followPointerOccasionally(event);
   window.addEventListener("pointermove", trackEyes);
   window.addEventListener("practiq:assistant:route-change", handleRouteChange);
   window.addEventListener("practiq:assistant:chat-toggle", onChatToggle);
@@ -1077,6 +1094,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
     unmount: () => {
       chat && chat.unmount();
       button.unmount();
+      setDesktopFocus(false);
       window.removeEventListener(
         "practiq:assistant:route-change",
         handleRouteChange

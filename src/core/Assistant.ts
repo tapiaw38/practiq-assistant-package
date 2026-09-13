@@ -224,9 +224,10 @@ export function createAssistant(options: AssistantOptions): Assistant {
   }
 
   function visionInstruction(message: string): string {
+    message = `${message}\n\nLa consigna y el trabajo adjuntos son el estado actual. Usa esta imagen para leer la respuesta manuscrita; un campo de respuesta textual vacío no significa que el alumno no respondió. Conserva el hilo pedagógico, pero no reutilices un veredicto sobre una versión anterior del trabajo.`;
     const intent = inferCopilotIntent(message);
     if (intent === "review_answer") {
-      return `${message}\n\nInstrucción Practiq: lee consigna y respuesta adjuntas. Empieza con “Correcta.” o “Incorrecta.”; luego una comprobación concreta. Máximo 2 líneas. Sin saludo, ánimo ni preguntas.`;
+      return `${message}\n\nInstrucción Practiq: lee consigna y respuesta adjuntas. Si podés determinar el resultado, empieza con “Correcta.” o “Incorrecta.” y una comprobación concreta. Si falta información o la imagen es ilegible, responde “No puedo determinarlo” y explica qué falta. Nunca inventes un veredicto. Máximo 2 líneas. Sin saludo ni ánimo.`;
     }
     if (intent === "hint") {
       return `${message}\n\nInstrucción Practiq: da solo siguiente operación o idea. Máximo 20 palabras. Sin saludo ni pregunta final.`;
@@ -345,6 +346,12 @@ export function createAssistant(options: AssistantOptions): Assistant {
   function resetContextCache() {
     lastContext = "";
     console.log("[assistant-package] context cache reset");
+  }
+
+  // Cache only context successfully delivered to Gillie. Failed requests and
+  // Copilot replies must leave it pending for the next Gillie request.
+  function markContextDelivered(normalizedContext: string, contextToSend: string) {
+    if (contextToSend !== "") lastContext = normalizedContext;
   }
 
   function resetConversationState() {
@@ -813,12 +820,9 @@ export function createAssistant(options: AssistantOptions): Assistant {
     const structuredContextText = await collectStructuredContextText();
     const normalizedContext = buildMessageContext(context, structuredContextText);
 
-    const contextToSend =
-      normalizedContext === lastContext ? "" : normalizedContext;
-
-    if (contextToSend !== "") {
-      lastContext = normalizedContext;
-    }
+    // Every turn operates on current work, including hints and explanations.
+    // Image bytes can change while structured text stays identical.
+    const contextToSend = normalizedContext;
 
     // Update FormData with processed context
     formData.set("context", contextToSend);
@@ -858,6 +862,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
       }
 
       const data = await response.json();
+      markContextDelivered(normalizedContext, contextToSend);
       const assistantMsg = data.data
         .reverse()
         .find((msg: any) => msg.sender === "assistant");
@@ -900,18 +905,14 @@ export function createAssistant(options: AssistantOptions): Assistant {
     const structuredContextText = await collectStructuredContextText();
     const normalizedContext = buildMessageContext(context, structuredContextText);
 
-    const contextToSend =
-      normalizedContext === lastContext ? "" : normalizedContext;
-
-    if (contextToSend !== "") {
-      lastContext = normalizedContext;
-    }
+    const contextToSend = normalizedContext;
 
     // Get checkbox state and add query parameter
     const showImages =
       chat && chat.getShowImages ? chat.getShowImages() : false;
     const pendingFormData = await buildMessageFormData(message, contextToSend);
     const hasImageAttachment = pendingFormData.has("image_content");
+    if (hasImageAttachment) pendingFormData.set("content", visionInstruction(message));
     const hasVoiceAttachment = pendingFormData.has("voice_content");
     const hasMediaAttachment = hasImageAttachment || hasVoiceAttachment;
     // An attached image still goes through Gillie Vision. Do not also trigger
@@ -964,6 +965,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
       }
 
       const data = await response.json();
+      markContextDelivered(normalizedContext, contextToSend);
       const assistantMsg = data.data
         .reverse()
         .find((msg: any) => msg.sender === "assistant");
